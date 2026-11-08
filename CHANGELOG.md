@@ -8,6 +8,29 @@ All notable changes to Yana AI release packs are documented here.
 
 ---
 
+## Unreleased: the app's Auto mode works
+
+- A headless chat turn may name its lease subject (`agent_id`, for example
+  `agent:yana-app`). Earlier releases refused the field, so Auto turns failed.
+- Such a turn uses only leases granted with `yana-rt lease grant --personal`,
+  kept outside the project. A `.yana-ai/leases.json` shipped in a folder never
+  covers it. A command the agent starts is refused that grant (defence in depth).
+- A personal grant covers only the short safe list (such as `git status`,
+  `cargo test`, `npm test`, `ls`, `cat`), with the program named without a path,
+  every path inside the project and no option that writes elsewhere or names a
+  program. It never covers structure files, and does not apply in the away mode
+  or at level 1. `make`, `npm run` and `pytest` still ask.
+- A build or a test runs the project's own code, and `git status` or `git diff`
+  run programs that the folder's git configuration names. With Auto on, code the
+  agent writes, or a hostile folder's own code, can therefore run with your full
+  rights.
+- A paused turn is resumed only in the folder it was paused in, and uses the
+  subject named by the resume request, not the one in the stored record.
+- A command lease no longer matches a call whose command cannot be read.
+- Commands still run without isolation.
+
+---
+
 ## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.5: remembered approvals, control levels, away mode, shared provider keys (2026-11-28)
 
 Update with `cargo install yana-rt` and `pip install -U yana-ai`. The Yana app

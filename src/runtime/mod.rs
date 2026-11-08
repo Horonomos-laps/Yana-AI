@@ -44,7 +44,7 @@ pub(crate) use away_cmd::{
 pub(crate) use level_cmd::{cmd_level_get, cmd_level_set};
 pub(crate) use origin::{TurnContext, TurnOrigin};
 pub(crate) use outcome::TurnOutcome;
-pub(crate) use pending_approval::scope_to_remember;
+pub(crate) use pending_approval::{prepare_locking, scope_to_remember};
 pub(crate) use pending_approval::{
     cmd_pending_approvals, disclosure_summary, reason_with_disclosure, resume_turn, PendingApprovalStore,
 };

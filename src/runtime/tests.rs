@@ -1405,6 +1405,114 @@ fn a_remembered_answer_runs_no_command_while_the_person_is_away() {
     assert!(matches!(back, AuthorityDecision::Allow { .. }), "the answer still counts once they are back: {back:?}");
 }
 
+const APP_SUBJECT: &str = "agent:yana-app";
+
+fn app_turn(root: &std::path::Path) -> TurnContext {
+    let mut context = request(root).context;
+    context.agent_id = Some(APP_SUBJECT.into());
+    context
+}
+
+fn grant_to_app(store: crate::capability::lease::LeaseStore, capability: &str, allow: &[&str]) {
+    let allow = allow.iter().map(|entry| entry.to_string()).collect();
+    store.grant(APP_SUBJECT.into(), capability.into(), allow, Vec::new(), "human".into(), 30, None, None).unwrap();
+}
+
+fn personal(root: &std::path::Path) -> crate::capability::lease::LeaseStore {
+    crate::capability::lease::LeaseStore::for_app_grants(root).unwrap()
+}
+
+#[test]
+fn a_lease_written_in_the_folder_never_covers_the_apps_own_turn() {
+    let root = project_with_lock_protocol();
+    grant_to_app(crate::capability::lease::LeaseStore::for_root(root.path()), "command.execute", &["cargo test"]);
+    let decision = YanaAuthorityChain.authorize_tool(&app_turn(root.path()), &call_with_command("run_command", "cargo test"));
+    assert!(needs_approval(&decision), "a downloaded folder could ship this record: {decision:?}");
+}
+
+#[test]
+fn a_personal_grant_runs_what_it_names_and_nothing_destructive_or_hidden() {
+    let root = project_with_lock_protocol();
+    grant_to_app(personal(root.path()), "command.execute", &["cargo test", "git push", "bash", "rm"]);
+    let context = app_turn(root.path());
+    let ask = |command: &str| YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", command));
+    assert!(matches!(ask("cargo test"), AuthorityDecision::Allow { .. }));
+    for command in ["git push origin main", "bash -c ls", "rm -rf build", "cargo run"] {
+        assert!(needs_approval(&ask(command)), "{command}");
+    }
+}
+
+#[test]
+fn a_personal_grant_never_reaches_outside_the_project_or_picks_its_own_program() {
+    let root = project_with_lock_protocol();
+    std::fs::create_dir_all(root.path().join("src")).unwrap();
+    std::fs::write(root.path().join("src/a.rs"), "x").unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    std::fs::write(outside.path().join("secret"), "s").unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(outside.path().join("secret"), root.path().join("link")).unwrap();
+    grant_to_app(personal(root.path()), "command.execute", &["git", "cat", "ls", "./ls", "cargo", "go", "make", "find", "grep"]);
+    let context = app_turn(root.path());
+    let ask = |command: &str| YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", command));
+    for command in ["git status", "git log -1", "git log --oneline", "cat src/a.rs", "ls src", "cargo test --release", "grep -rn x src"] {
+        assert!(matches!(ask(command), AuthorityDecision::Allow { .. }), "{command}");
+    }
+    let absolute = format!("cat {}", outside.path().join("secret").display());
+    for command in [
+        "git log --output=x", "git log --outpu=x", "git diff --no-index a b", "git -C . push", "git -c alias.a=x a",
+        "cat /etc/passwd", "cat ~/.ssh/id_ed25519", "cat ../secret", "cat src/../../secret", "./ls", "make", "find . -delete",
+        "cargo test --config x", "cargo +stable test", "go test -exec x", "cargo test --manifest-path=/tmp/x/Cargo.toml",
+        "grep -f/etc/passwd src", absolute.as_str(),
+    ] {
+        assert!(needs_approval(&ask(command)), "{command}");
+    }
+    #[cfg(unix)]
+    assert!(needs_approval(&ask("cat link")), "a link that leaves the project");
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(outside.path(), root.path().join("away")).unwrap();
+        for command in ["cargo test --target-dir=away/new", "ls away/missing/deeper", "grep -flink src", "grep -Rn x ."] {
+            assert!(needs_approval(&ask(command)), "{command}");
+        }
+    }
+    for command in [
+        "go build '-ldflags=-linkmode=external -extld=/usr/bin/true'", "cargo clippy -- --emit=dep-info=/tmp/x",
+        "cargo test --features=a=b", "cargo test '--color=always extra'", "go test -coverprofile=cover.out",
+        "go build --o=bin", "cargo test --target-dir=.git/hooks", "go test -vettool=x", "ls -L src",
+    ] {
+        assert!(needs_approval(&ask(command)), "{command}");
+    }
+    for command in ["go test ./...", "cargo test --color=never", "ls -la src"] {
+        assert!(matches!(ask(command), AuthorityDecision::Allow { .. }), "{command}");
+    }
+}
+
+#[test]
+fn a_personal_grant_does_not_apply_while_away_or_at_the_strict_level() {
+    let root = project_with_lock_protocol();
+    grant_to_app(personal(root.path()), "command.execute", &["cargo test"]);
+    let context = app_turn(root.path());
+    let call = call_with_command("run_command", "cargo test");
+
+    go_away(root.path(), 5, level::ControlLevel::SafeCommands);
+    assert!(denial_reason(&YanaAuthorityChain.authorize_tool(&context, &call)).contains("parked"));
+    away::stop(root.path()).unwrap();
+
+    choose_level(root.path(), level::ControlLevel::Strict);
+    assert!(needs_approval(&YanaAuthorityChain.authorize_tool(&context, &call)));
+}
+
+#[test]
+fn a_personal_file_grant_still_asks_for_structure_files() {
+    let root = project_with_lock_protocol();
+    std::fs::create_dir_all(root.path().join("src")).unwrap();
+    std::fs::create_dir_all(root.path().join(".github")).unwrap();
+    grant_to_app(personal(root.path()), "file.write", &[]);
+    let context = app_turn(root.path());
+    assert!(matches!(YanaAuthorityChain.authorize_tool(&context, &edit_call("src/a.rs")), AuthorityDecision::Allow { .. }));
+    assert!(needs_approval(&YanaAuthorityChain.authorize_tool(&context, &edit_call(".github/ci.yml"))));
+}
+
 #[test]
 fn stopping_or_running_out_of_the_box_goes_back_to_asking() {
     let root = project_with_lock_protocol();

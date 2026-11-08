@@ -85,6 +85,36 @@ struct HeadlessTurnInput {
     /// Sampling temperature (0 to 2; Anthropic caps it at 1). Omitted: the provider's default.
     #[serde(default)]
     temperature: Option<f64>,
+    /// The caller's lease subject, e.g. "agent:yana-app" (Capability Lease, Milestone "Authority
+    /// Depth" P0). It grants nothing by itself: it only lets `YanaAuthorityChain` look for a lease that
+    /// a human granted to this subject with `yana-rt lease grant`. Without a matching, unexpired,
+    /// in-budget lease every call still asks for approval, and the HALT check, the destructive-command
+    /// guard and the receipts apply exactly as before. Omitted: no lease is ever consulted.
+    #[serde(default)]
+    agent_id: Option<String>,
+}
+
+/// A stored record names its folder; resuming it elsewhere would act on a folder
+/// the person is not looking at.
+fn check_same_folder(stored: &Path, current: &Path) -> Result<()> {
+    match (stored.canonicalize(), current.canonicalize()) {
+        (Ok(stored), Ok(current)) if stored == current => Ok(()),
+        _ => anyhow::bail!("this turn was paused in another folder; open that folder to answer it"),
+    }
+}
+
+const MAX_AGENT_ID_LEN: usize = 64;
+
+/// "agent:<name>" with a short, plain name, so a lease subject is always readable in a receipt.
+fn validate_agent_id(value: Option<&str>) -> Result<Option<String>> {
+    let Some(value) = value.filter(|value| !value.is_empty()) else { return Ok(None) };
+    let name = value.strip_prefix("agent:").unwrap_or("");
+    let plain = name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'));
+    if value.len() <= MAX_AGENT_ID_LEN && !name.is_empty() && plain {
+        Ok(Some(value.to_string()))
+    } else {
+        anyhow::bail!("agent_id must be 'agent:<name>' with letters, digits, '-', '_' or '.', at most {MAX_AGENT_ID_LEN} characters")
+    }
 }
 
 /// `true` for Plan mode. Anything but the two known names is an error, never a silent fall back to Act.
@@ -176,7 +206,8 @@ pub(super) fn dispatch(provider_name: String, model: Option<String>) -> Result<(
         model.clone(),
         crate::capability::COMMANDS_ARE_ISOLATED
     );
-    let context = TurnContext::new(session.clone(), TurnOrigin::Desktop, true);
+    let mut context = TurnContext::new(session.clone(), TurnOrigin::Desktop, true);
+    context.agent_id = validate_agent_id(input.agent_id.as_deref())?;
     let plan_mode = parse_mode(input.mode.as_deref())?;
     super::gen_options::set_active(
         super::gen_options::GenerationOptions::parse(input.max_tokens, input.temperature).map_err(anyhow::Error::msg)?,
@@ -297,12 +328,21 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
     // Both before the approval is used up: a resume that cannot go ahead can be tried again.
     let paused = store.get(&input.approval_id).context("cannot resolve pending approval")?;
     check_same_provider(&paused.context.session.provider_name, provider.name())?;
+    check_same_folder(&paused.context.session.repo_root, &repo_root)?;
+    let agent_id = validate_agent_id(input.agent_id.as_deref())?;
     let api_key = crate::os::key_store::key_for_turn(&provider_name, input.api_key);
     let pooled = std::env::var_os(format!("{}_POOL", provider.env_var())).is_some();
     check_key_for_resume(provider.name(), provider.requires_key() && !pooled, api_key.is_some())?;
-    let resolved = store
+    let mut resolved = store
         .resolve(&input.approval_id, input.decision, input.decided_by.clone())
         .context("cannot resolve pending approval")?;
+    // The stored record comes from the folder: a resumed turn is the person's own,
+    // so it can only ever use grants kept outside the folder, and only for the
+    // subject this request names.
+    resolved.context.human_initiated = true;
+    resolved.context.agent_id = agent_id;
+    // The folder just checked, not whatever the record says on this second read.
+    resolved.context.session.repo_root = repo_root.clone();
     // Remembering the answer never blocks the turn: the person's decision for
     // this one call is already recorded above and stands either way.
     // Granted under the paused session's own root, the same value
@@ -415,6 +455,9 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct HeadlessResumeInput {
+    /// As on a new turn: the caller's lease subject, when its Auto mode is on.
+    #[serde(default)]
+    agent_id: Option<String>,
     approval_id: String,
     decision: bool,
     decided_by: String,
@@ -931,6 +974,56 @@ mod tests {
         for other in ["openai", "", "Ollama", "ollama "] {
             assert!(check_same_provider("ollama", other).is_err(), "{other:?}");
         }
+    }
+
+    #[test]
+    fn a_paused_turn_resumes_only_in_its_own_folder_and_names_its_own_subject() {
+        let here = tempfile::tempdir().unwrap();
+        let there = tempfile::tempdir().unwrap();
+        assert!(check_same_folder(here.path(), here.path()).is_ok());
+        assert!(check_same_folder(there.path(), here.path()).is_err());
+        assert!(check_same_folder(Path::new("/no/such/folder"), here.path()).is_err());
+        let input: HeadlessResumeInput = serde_json::from_str(
+            r#"{"approval_id":"a","decision":true,"decided_by":"human:x","agent_id":"agent:yana-app"}"#).unwrap();
+        assert_eq!(input.agent_id.as_deref(), Some("agent:yana-app"));
+    }
+
+    #[test]
+    fn agent_id_absent_or_empty_means_no_lease_lookup() {
+        assert_eq!(validate_agent_id(None).unwrap(), None);
+        assert_eq!(validate_agent_id(Some("")).unwrap(), None);
+    }
+
+    #[test]
+    fn agent_id_accepts_plain_agent_subjects() {
+        assert_eq!(validate_agent_id(Some("agent:yana-app")).unwrap().as_deref(), Some("agent:yana-app"));
+        assert_eq!(validate_agent_id(Some("agent:a.b_c-1")).unwrap().as_deref(), Some("agent:a.b_c-1"));
+    }
+
+    #[test]
+    fn agent_id_rejects_other_shapes() {
+        for bad in [
+            "yana-app",
+            "agent:",
+            "human:tam",
+            "agent:../x",
+            "agent:a b",
+            "agent:a\u{0}b",
+            "agent:\u{202e}x",
+            "agent:'; rm -rf /",
+            &format!("agent:{}", "a".repeat(65)),
+        ] {
+            assert!(validate_agent_id(Some(bad)).is_err(), "accepted {bad:?}");
+        }
+    }
+
+    #[test]
+    fn turn_input_accepts_agent_id_field() {
+        let input: HeadlessTurnInput =
+            serde_json::from_str(r#"{"task":"hi","agent_id":"agent:yana-app"}"#).unwrap();
+        assert_eq!(input.agent_id.as_deref(), Some("agent:yana-app"));
+        let without: HeadlessTurnInput = serde_json::from_str(r#"{"task":"hi"}"#).unwrap();
+        assert_eq!(without.agent_id, None);
     }
 
     #[test]

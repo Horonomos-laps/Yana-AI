@@ -96,7 +96,7 @@ fn holds_locks(root: &Path) -> bool {
 /// An approval cannot be saved without the flock-v1 marker, which only a Yana
 /// install wrote. Where nothing else takes these locks it is written here. What
 /// exists is never rewritten, and nothing is written through a symlink.
-fn prepare_locking(root: &Path) -> Result<()> {
+pub(crate) fn prepare_locking(root: &Path) -> Result<()> {
     let marker = root.join(yana_rt::flock_v1::PROTOCOL_FILE);
     // Order matters: another asker may be writing the marker and then locks right now.
     if holds_locks(root) || may_exist(&marker) {

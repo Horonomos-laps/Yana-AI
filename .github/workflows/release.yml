@@ -256,6 +256,19 @@ jobs:
           EOF
           cat "${{ matrix.asset }}.manifest.json"
 
+      # action-gh-release uploads each file under its own file name and has no
+      # asset_name input, so the three Unix legs all uploaded a file named
+      # "yana-rt" and overwrote one another (v1.4.2 and v1.5.4 ended up with one
+      # unnamed Unix binary next to four platform manifests). Copy the binary to
+      # its platform name first, so the asset matches its manifest.
+      - name: Stage the binary under its platform name
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "dist/${{ matrix.asset }}"
+          ls -l "dist/${{ matrix.asset }}"
+
       - name: Upload binary to Release
         # Only on the real tag-push trigger -- a workflow_dispatch run (see
         # the `on:` block's comment) has no tag to attach a release to.
@@ -263,6 +276,5 @@ jobs:
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: |
-            target/${{ matrix.target }}/release/${{ matrix.binary }}
+            dist/${{ matrix.asset }}
             ${{ matrix.asset }}.manifest.json
-          asset_name: ${{ matrix.asset }}

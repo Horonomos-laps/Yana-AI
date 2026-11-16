@@ -110,14 +110,14 @@ flowchart LR
 
 | 구성 요소 | 하는 일 | 상태 |
 | --- | --- | --- |
-| **[Yana Studio](tools/yana-studio)** | 실제 프로젝트를 위한 데스크톱 작업 공간: 파일, 편집기, 터미널, 채팅, 작업, 디자인 캔버스. | ![사용 중, 일부 기능](https://img.shields.io/badge/사용_중-일부_기능-2e8b75) |
+| **[Yana Studio](https://github.com/Horonomos-laps/Yana-studio/tree/main/yana-studio)** | 실제 프로젝트를 위한 데스크톱 작업 공간: 파일, 편집기, 터미널, 채팅, 작업, 디자인 캔버스. | ![사용 중, 일부 기능](https://img.shields.io/badge/사용_중-일부_기능-2e8b75) |
 | **[런타임 `yana-rt`](src)** | 모든 클라이언트와 모든 provider를 위한 하나의 턴 루프와 하나의 authority 계약을 가진 Rust 엔진. | ![사용 중](https://img.shields.io/badge/-사용_중-2e8b75) |
 | **[Governance](core)** | Capability manifest, 사람의 승인, 해시 체인 감사 로그, core-lock 무결성. | ![사용 중](https://img.shields.io/badge/-사용_중-2e8b75) |
 | **[Giám Thị](#giám-thị)** | AI 세션 밖에서 동작하는 감시자. 변조를 발견하면 이후 모든 도구 호출을 막습니다. | ![사용 중, 선택 사항](https://img.shields.io/badge/사용_중-선택_사항-2e8b75) |
 | **[Harness adapters](adapters)** | Claude Code, Codex, Cursor, Antigravity. 집행 강도는 호스트마다 다릅니다. | ![호스트별 상이](https://img.shields.io/badge/사용_중-호스트별_상이-2e8b75) |
 | **[지식 계층](core/skills)** | 에이전트에게 일하는 방법을 가르치는 에이전트, 스킬, 명령, 규칙. 권한은 부여하지 않습니다. | ![사용 중](https://img.shields.io/badge/-사용_중-2e8b75) |
 | **[Yana OS](src/os)** | 로컬 관리 계층: 에이전트 신원, 자율 수준, 할당량, 상태, 격리. | ![개발 중](https://img.shields.io/badge/-개발_중-d97706) |
-| **[Yana Desktop / Web](tools/yana-web)** | 이전 Electron 셸과 웹 UI. Studio는 별도로 다시 만든 것이지 껍데기만 바꾼 것이 아닙니다. | ![별도 유지보수](https://img.shields.io/badge/-별도_유지보수-64748b) |
+| **[Yana Desktop / Web](https://github.com/Horonomos-laps/yana-web)** | 이전 Electron 셸과 웹 UI. Studio는 별도로 다시 만든 것이지 껍데기만 바꾼 것이 아닙니다. | ![별도 유지보수](https://img.shields.io/badge/-별도_유지보수-64748b) |
 | **[Yana Wheelbot](https://github.com/yanacuti1121/yana-wheelbot)** | ESP32-S3 기반 로봇 플랫폼, 별도 저장소. | ![실험적](https://img.shields.io/badge/-실험적-dc2626) |
 
 `사용 중`은 배포되어 실제로 쓰이고 있다는 뜻입니다. `개발 중`은 실제 코드는 있지만 기능이
@@ -159,15 +159,17 @@ core/
 
 아직 없는 것: 기기 목록, 에이전트 세션 화면, 모바일 페어링, SSH/Docker 실행, 기한부 권한
 UI, 서명된 자동 업데이트. 화면별 상태는
-[`tools/yana-studio/SCREEN-STATUS.md`](tools/yana-studio/SCREEN-STATUS.md)에 있습니다.
+Yana-studio 저장소의 [`yana-studio/SCREEN-STATUS.md`](https://github.com/Horonomos-laps/Yana-studio/blob/main/yana-studio/SCREEN-STATUS.md)에 있습니다.
 
 <details>
-<summary><b>소스에서 Studio 빌드하기</b></summary>
+<summary><b>소스에서 Studio 빌드하기 (Yana-studio 저장소)</b></summary>
 
 Node 24+와 `node-pty`용 C++ 툴체인이 필요합니다.
 
 ```bash
-cd tools/yana-studio
+git clone https://github.com/Horonomos-laps/Yana-studio.git && cd Yana-studio
+(cd yana-ide/studio-web && npm ci)
+cd yana-studio
 npm ci && npm run rebuild
 npm run stage:runtime -- /yana-rt/의/절대/경로
 npm start
@@ -184,7 +186,7 @@ MCP가 각자 권한 로직을 다시 구현할 필요가 없습니다.
 - **장애 조치:** 타입이 있는 provider 오류, 대체 provider, credential pool 순환.
 - **상태:** 전문 검색이 되는 SQLite 세션 저장소, 프로필별 상태, 충돌 복구, 롤백 가능한 shadow-git 체크포인트.
 - **Capability 도구:** 파일 읽기/패치, 검증을 거친 명령 실행, stdio 기반 MCP 클라이언트, 검사된 HTTPS 계층을 거치는 `web.search`, 읽기 전용 LSP 클라이언트.
-- **선택 기능:** `mcp`, `lsp`, `pty-bridge`, Discord 원격 어댑터. 기본 빌드에서는 꺼져 있습니다.
+- **기능:** 기본 빌드에는 `cli`와 `mcp`(MCP 서버와 클라이언트)가 들어 있습니다. `lsp`, `pty-bridge`, Discord 원격 어댑터는 선택 기능이며 기본으로 꺼져 있습니다.
 
 남은 런타임 작업은 [CURRENT-MILESTONE.md](CURRENT-MILESTONE.md)에 있습니다: 모든 클라이언트를
 하나의 capability executor로 통합하는 것, 그리고 mock 대신 실제 로컬 모델로 도구 호출을
@@ -192,35 +194,36 @@ MCP가 각자 권한 로직을 다시 구현할 필요가 없습니다.
 
 ## 성능
 
-2026-10-20, Apple M4 MacBook Air (RAM 16 GB, macOS 27.2)에서 커밋 `986093f5`의 `yana-rt` 1.5.1
-릴리스 빌드로 이 저장소를 대상으로 측정했습니다. 각 값은 3회 평균입니다 (시작 시간은 100회,
-hook은 50회). Python 열은 각 Rust 명령이 대체하는 스크립트입니다. 마지막 열은 2026-08-26
-측정값이며, 전체 이력과 방법은 [BENCHMARK.md](BENCHMARK.md)에 있습니다.
+2026-11-16, Apple M4 MacBook Air (RAM 16 GB, macOS 27.3)에서 릴리스 커밋 `c8c29fb2`의
+`yana-rt` 1.5.4 기본 릴리스 빌드로 이 저장소를 대상으로 측정했습니다. Rust와 Python을 한 번
+예열한 뒤 번갈아 실행했고, 각 값은 중앙값입니다 (실행 횟수는 표에 표시). Python 열은 각 Rust
+명령이 대체하는 스크립트입니다. 마지막 열은 같은 방법으로 2026-11-15에 잰 1.5.2이며, 전체
+이력은 [BENCHMARK.md](BENCHMARK.md)와 [기술 보고서](https://yana.vutam.link/whitepaper-en.html)에
+있습니다.
 
-| 경로 | `yana-rt` | Python | 결과 | 출력 일치? | 2026-08-26 |
+| 경로 | `yana-rt` 1.5.4 | Python | 결과 | 출력 일치? | 1.5.2 (2026-11-15) |
 | --- | ---: | ---: | --- | --- | --- |
-| 프로세스 시작 | **4.16 ms** | | | | 4.21 ms |
-| `doctor` | **143 ms** | 415 ms | Rust 2.9배 빠름 | 예, 양쪽 16개 항목 (ok 11, 경고 1, info 4) | 255 ms, Rust 10개 항목 대 16개 |
-| `ci check` | **5.8 ms** | 33 ms | Rust 5.7배 빠름 | 예, 양쪽 경고 5개 | 414 ms, Rust 0개 대 3개 |
-| `scan core/skills` | **0.55 s** | 8.47 s | Rust 15.5배 빠름 | 같은 파일 (1,791 대 1,795), 같은 최상위 발견; 점수는 다름 (40 대 0) | 4.45 s |
-| HALT 검사 hook | **5.4 ms** | | | | 3.80 ms |
-| 파괴적 명령 guard | **4.9 ms** | | | | 측정 안 함 |
+| 프로세스 시작 (60회) | **6.17 ms** | | | | 4.21 ms |
+| `doctor` (12) | **152 ms** | 209 ms | Rust 1.4배 빠름 | | 139 ms, 1.4배 |
+| `ci check` (20) | **7.2 ms** | 34.1 ms | Rust 4.8배 빠름 | 예, 양쪽 경고 6개 | 5.7 ms, 5.4배 |
+| `scan core/skills` (5) | **0.58 s** | 8.60 s | Rust 14.8배 빠름 | 같은 최상위 발견 (`SE004`); 파일 수 1,794 대 1,825 | 0.56 s, 14.5배 |
+| 파괴적 명령 guard (40) | **5.91 ms** | | | | 5.27 ms |
+| token-budget guard (40) | **5.64 ms** | | | | 측정 안 함 |
 
-| 메모리와 크기 | `yana-rt` | Python |
+| 메모리와 크기 | `yana-rt` 1.5.4 | Python |
 | --- | ---: | ---: |
-| 최대 RSS, `scan core/skills` | **17.7 MiB** | 26.5 MiB |
-| 최대 RSS, 기본 전체 저장소 스캔 | **22.4 MiB** | 29.4 MiB |
-| 릴리스 바이너리 | 18.2 MiB | |
+| 최대 RSS, `scan core/skills` | **16.3 MiB** | 25.4 MiB |
+| 최대 RSS, 기본 전체 저장소 스캔 | **20.7 MiB** | 32.1 MiB |
+| 릴리스 바이너리 (기본 빌드) | 22.9 MiB | |
 
-8월 이후 `doctor`와 `ci check`는 Python과 출력이 일치하게 되었고 둘 다 빨라졌습니다. 릴리스
-바이너리는 약 14 MiB에서 커졌습니다.
+속도 비율은 1.5.2 측정과 일치합니다. 측정 중 기기가 바빴고 (평균 부하 5.0~5.2), Rust의 절대
+시간은 2026-11-15보다 3~47% 높습니다. 두 측정만으로는 기기 탓과 코드 탓을 아직 나눌 수
+없습니다. 10월에 MCP 서버가 기본 빌드에 들어간 뒤로 바이너리는 22.9 MiB입니다.
 
 > [!WARNING]
-> 기본 전체 저장소 `scan`은 아직 같은 조건의 비교가 아닙니다. Rust는 620개 파일을 0.36초에
-> 훑고 발견 사항이 없었고, Python은 1,643개 파일을 6.14초에 훑고 critical `SE002` 9건을
-> 보고했습니다. 이것은 맞춰야 할 차이이지 17배 빠르다는 뜻이 아닙니다.
-> token-budget guard는 다시 측정하지 않았습니다. 새 worktree에서는 잠금 상태가 초기화되지
-> 않아 일찍 종료하므로, 그때 잰 시간은 오류 경로만 측정합니다.
+> 기본 전체 저장소 `scan`은 아직 같은 조건의 비교가 아닙니다. 양쪽의 기본 범위가 다릅니다
+> (Rust 0.29초, Python 6.89초). 이것은 맞춰야 할 차이이지 23배 빠르다는 뜻이 아닙니다.
+> token-budget guard는 `flock-v1` 표시 파일이 있는 프로젝트에서 첫 호출을 잰 값입니다.
 
 한 대의 기기에서 측정한 값입니다. Linux와 Windows는 측정하지 않았습니다.
 

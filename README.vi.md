@@ -111,7 +111,7 @@ Skill dạy agent cách làm việc. Chỉ capability mới cấp quyền hành 
 
 | Thành phần | Làm gì | Trạng thái |
 | --- | --- | --- |
-| **[Yana Studio](tools/yana-studio)** | Không gian làm việc desktop: file, editor, terminal, chat, task và canvas thiết kế cho một dự án thật (v1.7.0). | ![Đang dùng, chưa đủ tính năng](https://img.shields.io/badge/đang_dùng-chưa_đủ_tính_năng-2e8b75) |
+| **[Yana Studio](https://github.com/Horonomos-laps/Yana-studio/tree/main/yana-studio)** | Không gian làm việc desktop: file, editor, terminal, chat, task và canvas thiết kế cho một dự án thật (v1.7.0). | ![Đang dùng, chưa đủ tính năng](https://img.shields.io/badge/đang_dùng-chưa_đủ_tính_năng-2e8b75) |
 | **[Yana IDE](tools/yana-ide)** | Không gian làm việc agent trên nền VS Code được tùy biến sâu với Yana agent cockpit và công cụ office. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
 | **[Runtime `yana-rt`](src)** | Engine Rust với một vòng lặp turn và một hợp đồng authority cho mọi client, mọi provider. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
 | **[Governance](core)** | Capability manifest, phê duyệt của con người, nhật ký kiểm toán nối băm, toàn vẹn core-lock. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
@@ -119,7 +119,7 @@ Skill dạy agent cách làm việc. Chỉ capability mới cấp quyền hành 
 | **[Harness adapters](adapters)** | Claude Code, Codex, Cursor và Antigravity. Mức thực thi khác nhau tùy host. | ![Tùy host](https://img.shields.io/badge/đang_dùng-tùy_host-2e8b75) |
 | **[Lớp tri thức](core/skills)** | 100 agent, 2.035 skill, command và rule dạy agent cách làm việc. Chúng không cấp quyền nào. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
 | **[Yana OS](src/os)** | Lớp quản lý cục bộ: danh tính agent, mức tự chủ, quota, sức khỏe, cách ly. | ![Đang phát triển](https://img.shields.io/badge/-đang_phát_triển-d97706) |
-| **[Yana Desktop / Web](tools/yana-web)** | Vỏ Electron và giao diện web đời trước. Studio là bản dựng lại riêng, không phải đổi giao diện. | ![Bảo trì riêng](https://img.shields.io/badge/-bảo_trì_riêng-64748b) |
+| **[Yana Desktop / Web](https://github.com/Horonomos-laps/yana-web)** | Vỏ Electron và giao diện web đời trước. Studio là bản dựng lại riêng, không phải đổi giao diện. | ![Bảo trì riêng](https://img.shields.io/badge/-bảo_trì_riêng-64748b) |
 | **[Yana Wheelbot](https://github.com/yanacuti1121/yana-wheelbot)** | Nền tảng robot trên ESP32-S3, nằm trong repository riêng. | ![Thử nghiệm](https://img.shields.io/badge/-thử_nghiệm-dc2626) |
 
 `Đang dùng` nghĩa là đã phát hành và được sử dụng. `Đang phát triển` nghĩa là đã có code
@@ -162,15 +162,17 @@ Studio chỉ nói chuyện với model qua `yana-rt`; lớp giao diện không b
 
 Chưa làm: danh sách thiết bị, màn hình phiên agent, ghép nối điện thoại, chạy qua
 SSH/Docker, giao diện cấp quyền có thời hạn, tự cập nhật có ký số. Trạng thái từng màn
-hình nằm ở [`tools/yana-studio/SCREEN-STATUS.md`](tools/yana-studio/SCREEN-STATUS.md).
+hình nằm ở [`yana-studio/SCREEN-STATUS.md`](https://github.com/Horonomos-laps/Yana-studio/blob/main/yana-studio/SCREEN-STATUS.md) trong kho Yana-studio.
 
 <details>
-<summary><b>Build Studio từ mã nguồn</b></summary>
+<summary><b>Build Studio từ mã nguồn (kho Yana-studio)</b></summary>
 
 Cần Node 24+ và bộ công cụ C++ cho `node-pty`.
 
 ```bash
-cd tools/yana-studio
+git clone https://github.com/Horonomos-laps/Yana-studio.git && cd Yana-studio
+(cd yana-ide/studio-web && npm ci)
+cd yana-studio
 npm ci && npm run rebuild
 npm run stage:runtime -- /duong/dan/tuyet/doi/toi/yana-rt
 npm start

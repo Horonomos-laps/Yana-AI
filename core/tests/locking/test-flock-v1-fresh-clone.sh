@@ -147,7 +147,12 @@ if command -v node >/dev/null 2>&1; then
   ROOT=$(new_root)
   mkdir -p "$ROOT/core/lib"
   cp "$REPO_ROOT/core/lib/locking.sh" "$ROOT/core/lib/locking.sh"
-  HOOK_PATH="$(dirname "$(command -v node)"):/usr/bin:/bin:/usr/sbin:/sbin"
+  # node alone in its own directory: where node is installed next to yana-rt
+  # (both in ~/.local/bin, for example), its directory cannot go on this PATH.
+  NODE_ONLY="$TMP_PARENT/node-only-bin"
+  mkdir -p "$NODE_ONLY"
+  ln -sf "$(command -v node)" "$NODE_ONLY/node"
+  HOOK_PATH="$NODE_ONLY:/usr/bin:/bin:/usr/sbin:/sbin"
   PATH="$HOOK_PATH" command -v yana-rt >/dev/null 2>&1 && fail "yana-rt is on the scrubbed PATH; the fallback would not run"
   CODE=0
   printf '{"tool_name":"Bash","tool_input":{"command":"true"}}' | PATH="$HOOK_PATH" CLAUDE_PROJECT_DIR="$ROOT" \
@@ -157,6 +162,51 @@ if command -v node >/dev/null 2>&1; then
   [[ "$(cat "$ROOT/$MARKER_REL")" == "flock-v1" ]] || fail "hook did not activate the marker"
   grep -q "OK — Bash (attempt 1 / 5)" "$ROOT/stdout.log" || fail "hook did not run its budget check: $(cat "$ROOT/stdout.log")"
   pass "token-budget-guard.sh (Node fallback) allows the first call on a new checkout"
+
+  # 9d. Node fallback without the opt-in: the hook must not block (exit 2) every
+  #     tool call, which used to lock a fresh-clone session for good. It warns
+  #     with exit 1, writes nothing and skips the budget check.
+  ROOT=$(new_root)
+  mkdir -p "$ROOT/core/lib"
+  cp "$REPO_ROOT/core/lib/locking.sh" "$ROOT/core/lib/locking.sh"
+  CODE=0
+  printf '{"tool_name":"Read","tool_input":{"file_path":"x"}}' | PATH="$HOOK_PATH" CLAUDE_PROJECT_DIR="$ROOT" \
+    YANA_RT_BIN="$RUNTIME" YANA_LOG="$ROOT/audit.log" \
+    bash "$REPO_ROOT/core/hooks/token-budget-guard.sh" >"$ROOT/stdout.log" 2>"$ROOT/stderr.log" || CODE=$?
+  [[ "$CODE" -eq 1 ]] || fail "hook without the opt-in exited $CODE (want 1, not blocking): $(cat "$ROOT/stderr.log")"
+  [[ ! -e "$ROOT/$MARKER_REL" ]] || fail "hook wrote the marker without the opt-in"
+  grep -q "YANA_LOCK_AUTO_ACTIVATE=1" "$ROOT/stderr.log" || fail "no activation hint: $(cat "$ROOT/stderr.log")"
+  grep -q "tool not blocked" "$ROOT/stderr.log" || fail "no skip notice: $(cat "$ROOT/stderr.log")"
+  grep -q "OK — " "$ROOT/stdout.log" && fail "budget check ran without a lock"
+  pass "token-budget-guard.sh (Node fallback) without the opt-in warns instead of blocking"
+
+  # 9e. The maintenance gate still blocks in the fallback path.
+  ROOT=$(new_root)
+  mkdir -p "$ROOT/core/lib" "$ROOT/.claude/state"
+  cp "$REPO_ROOT/core/lib/locking.sh" "$ROOT/core/lib/locking.sh"
+  : > "$ROOT/.claude/state/locking-maintenance"
+  CODE=0
+  printf '{"tool_name":"Bash","tool_input":{"command":"true"}}' | PATH="$HOOK_PATH" CLAUDE_PROJECT_DIR="$ROOT" \
+    YANA_RT_BIN="$RUNTIME" YANA_LOG="$ROOT/audit.log" \
+    bash "$REPO_ROOT/core/hooks/token-budget-guard.sh" >"$ROOT/stdout.log" 2>"$ROOT/stderr.log" || CODE=$?
+  [[ "$CODE" -eq 2 ]] || fail "maintenance gate did not block in the fallback (exit $CODE)"
+  [[ ! -e "$ROOT/$MARKER_REL" ]] || fail "marker written under the maintenance gate"
+  grep -q "maintenance gate is active" "$ROOT/stderr.log" || fail "blocked for another reason: $(cat "$ROOT/stderr.log")"
+  pass "token-budget-guard.sh (Node fallback) still blocks under the maintenance gate"
+
+  # 9f. A mismatched marker still blocks in the fallback path and is left unchanged.
+  ROOT=$(new_root)
+  mkdir -p "$ROOT/core/lib" "$ROOT/.claude/state"
+  cp "$REPO_ROOT/core/lib/locking.sh" "$ROOT/core/lib/locking.sh"
+  printf 'mkdir-v1\n' > "$ROOT/$MARKER_REL"
+  CODE=0
+  printf '{"tool_name":"Bash","tool_input":{"command":"true"}}' | PATH="$HOOK_PATH" CLAUDE_PROJECT_DIR="$ROOT" \
+    YANA_LOCK_AUTO_ACTIVATE=1 YANA_RT_BIN="$RUNTIME" YANA_LOG="$ROOT/audit.log" \
+    bash "$REPO_ROOT/core/hooks/token-budget-guard.sh" >"$ROOT/stdout.log" 2>"$ROOT/stderr.log" || CODE=$?
+  [[ "$CODE" -eq 2 ]] || fail "mismatched marker did not block in the fallback (exit $CODE)"
+  [[ "$(cat "$ROOT/$MARKER_REL")" == "mkdir-v1" ]] || fail "mismatched marker was rewritten"
+  grep -q "marker mismatch" "$ROOT/stderr.log" || fail "blocked for another reason: $(cat "$ROOT/stderr.log")"
+  pass "token-budget-guard.sh (Node fallback) still blocks on a mismatched marker"
 else
   printf 'SKIP hook Node fallback (node not installed)\n'
 fi

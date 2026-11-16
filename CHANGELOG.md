@@ -8,6 +8,60 @@ All notable changes to Yana AI release packs are documented here.
 
 ---
 
+## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.4: fresh-clone lockout fix, authority checks, status snapshot, repository split (2026-11-16)
+
+All three axes ship 1.5.4 from the same commit. npm is not published.
+Update with `cargo install yana-rt` and `pip install -U yana-ai`.
+
+**1.5.3 was not released.** It was prepared and tested on 2026-11-16, and
+testing found the lockout below still present, so it was withdrawn before any
+tag or upload. 1.5.4 contains everything 1.5.3 would have shipped plus the fix.
+No `v1.5.3`, `rt-v1.5.3` or `py-v1.5.3` tag exists and no registry has 1.5.3,
+although `pyproject.toml` on `main` already read 1.5.3 since #541.
+
+Fix, fresh-clone session lockout (`token-budget-guard.sh`):
+- On a new clone `.claude/state/` is gitignored, so the flock-v1 marker is
+  missing. When `yana-rt` was not on PATH (a cloud session, for example) the
+  hook's fallback ran `yana-rt guard lock-with`, which exits 2 without a
+  marker. Claude Code reads exit 2 as "block", and the hook runs on every tool,
+  so every call was refused, including one that could create the marker. The
+  session could only be left, not repaired. #541 added an opt-in
+  (`YANA_LOCK_AUTO_ACTIVATE=1`) and a hint, but without the opt-in the call was
+  still blocked.
+- The fallback now matches the Rust fast path: without a marker it skips that
+  call's budget check and exits 1 (shown, not blocking). It still writes the
+  marker only with the opt-in, and the maintenance gate still blocks.
+- `core/tests/locking/test-flock-v1-fresh-clone.sh` covers both cases (checked
+  to fail against the old hook) and now runs on machines where `node` and
+  `yana-rt` share a directory; before, that stopped the file before its last
+  three cases.
+
+Runtime (`yana-rt`):
+- `yana-rt authority check`: ask the authority chain for a decision without a
+  model in the loop.
+- `yana-rt authority verify`: check that every recorded execution traces back
+  to an allowing decision.
+- A refused call's decision receipt names the lease rule that refused it.
+- `yana-rt status`: one read-only snapshot for every surface, also exposed as a
+  read-only MCP tool.
+- MCP: rmcp 3.6.0 (exact pin), `allowed_tools`, pinned tool definitions and
+  safety hints.
+- flock-v1 locking is opt-in on a fresh checkout.
+
+Security and dependencies:
+- quinn-udp 0.5.16 clears RUSTSEC-2026-0538.
+- tungstenite 0.30.0 and a group of minor and patch crate updates.
+
+Repository:
+- The website moved to `yana-web` and the apps (Yana 1.0.0 for macOS, Studio,
+  IDE) to `Yana-studio`. This repository keeps the runtime, `core/`, rules and
+  hooks. Yana Desktop (Electron) is no longer built here.
+- The root `package.json` no longer carries the website's packages.
+
+Python package (`yana-ai`): no change to the Python code itself; the wheel
+ships the `core/`, `bin/` and plugin files above, including the fixed hook, at
+1.5.4.
+
 ## yana-rt (crates.io) and yana-ai (PyPI) 1.5.2: first-run fixes, honest counts, harness audit (2026-11-03)
 
 Both axes ship 1.5.2 from the same commit. npm is not published.

@@ -57,6 +57,12 @@ Code/fix → test thủ công → chạy pre-push hook → nếu PASS → push
 
 ## Automation
 
+Cài đặt hook một lần (các worktree dùng chung):
+
+```bash
+ln -sf ../../scripts/git-hooks/pre-push .git/hooks/pre-push
+```
+
 Hook `.git/hooks/pre-push` chạy tự động trên mọi `git push` trực tiếp từ terminal.
 
 Khi Claude Code push (qua Bash tool với hook disabled tạm thời), agent **phải** chạy thủ công:

@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Pre-push checks described in core/rules/65-pre-push-verify-law.md.
+#
+# Install once per clone (worktrees share it):
+#   ln -sf ../../scripts/git-hooks/pre-push .git/hooks/pre-push
+# Remove: rm .git/hooks/pre-push
+#
+# On the files changed by the pushed commits it checks JavaScript syntax
+# (node --check), shell syntax (bash -n) and JSON validity, warns about added
+# console.log / debugger lines, then runs the skill trigger tests. Any failure
+# blocks the push. Do not bypass with --no-verify (rule 65).
+set -euo pipefail
+
+ZERO_SHA="0000000000000000000000000000000000000000"
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+CHANGED="$(mktemp "${TMPDIR:-/tmp}/yana-pre-push.XXXXXX")"
+trap 'rm -f "$CHANGED"' EXIT
+FAILED=0
+
+# stdin: "<local ref> <local sha> <remote ref> <remote sha>" per pushed ref.
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [[ "$local_sha" == "$ZERO_SHA" ]] && continue          # deleting a ref
+  base="$remote_sha"
+  if [[ "$remote_sha" == "$ZERO_SHA" ]]; then             # new branch on the remote
+    base="$(git merge-base "$local_sha" origin/main 2>/dev/null || true)"
+  fi
+  [[ -n "$base" ]] || continue
+  git diff -z --name-only --diff-filter=ACMR "$base" "$local_sha" >> "$CHANGED"
+done
+
+check_file() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  case "$file" in
+    *.js|*.mjs|*.cjs)
+      if command -v node >/dev/null 2>&1 && ! node --check "$file" 2>/dev/null; then
+        echo "pre-push: JavaScript syntax error in $file" >&2
+        FAILED=1
+      fi
+      ;;
+    *.sh)
+      if ! bash -n "$file" 2>/dev/null; then
+        echo "pre-push: shell syntax error in $file" >&2
+        FAILED=1
+      fi
+      ;;
+    *.json)
+      if ! python3 -I -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"))' "$file" 2>/dev/null; then
+        echo "pre-push: invalid JSON in $file" >&2
+        FAILED=1
+      fi
+      ;;
+  esac
+}
+
+COUNT=0
+while IFS= read -r -d '' file; do
+  COUNT=$((COUNT + 1))
+  check_file "$file"
+done < <(sort -zu "$CHANGED")
+
+# Warn only: added console.log / debugger lines in JavaScript.
+while IFS= read -r -d '' file; do
+  case "$file" in *.js|*.mjs|*.cjs) ;; *) continue ;; esac
+  if [[ -f "$file" ]] && grep -n -E '^\s*(console\.log\(|debugger;?\s*$)' "$file" >/dev/null 2>&1; then
+    echo "pre-push: warning: console.log or debugger in $file" >&2
+  fi
+done < <(sort -zu "$CHANGED")
+
+TRIGGER_TEST="core/tests/skills/test-skill-triggering.sh"
+if [[ -f "$TRIGGER_TEST" ]]; then
+  if ! bash "$TRIGGER_TEST" >/dev/null 2>&1; then
+    echo "pre-push: skill trigger tests failed (bash $TRIGGER_TEST)" >&2
+    FAILED=1
+  fi
+fi
+
+if [[ "$FAILED" -ne 0 ]]; then
+  echo "pre-push: blocked. Fix the errors above, then push again." >&2
+  exit 1
+fi
+echo "pre-push: $COUNT changed file(s) checked, skill trigger tests passed" >&2
+exit 0

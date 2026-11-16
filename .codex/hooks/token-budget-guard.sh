@@ -70,13 +70,15 @@ source "$LOCKING_LIB"
 # which reports "lock unavailable" with exit 1 (shown, not blocking): skip this
 # call's budget check. The marker is still written only with
 # YANA_LOCK_AUTO_ACTIVATE=1, and the maintenance gate and a mismatched marker
-# still block through with_lock below.
+# still block through with_lock below. Test mode (YANA_LOCKING_PROTOCOL_MODE=test)
+# needs no marker in the runtime, so it is not skipped here either.
 if declare -F _yana_lock_bootstrap_marker >/dev/null; then
   _yana_lock_bootstrap_marker "$PROJECT_DIR" || true
 fi
 _marker="$PROJECT_DIR/.claude/state/locking-protocol-version"
 _maintenance="$PROJECT_DIR/.claude/state/locking-maintenance"
-if [[ ! -e "$_marker" && ! -L "$_marker" && ! -e "$_maintenance" && ! -L "$_maintenance" ]]; then
+if [[ "${YANA_LOCKING_PROTOCOL_MODE:-}" != "test" \
+      && ! -e "$_marker" && ! -L "$_marker" && ! -e "$_maintenance" && ! -L "$_maintenance" ]]; then
   echo "[token-budget-guard] lock unavailable: flock-v1 marker missing ($_marker); budget check skipped for this call, tool not blocked. Activate with YANA_LOCK_AUTO_ACTIVATE=1 on a fresh checkout, or core/scripts/migrate-locking-protocol-v1.py on an mkdir-v1 install" >&2
   exit 1
 fi

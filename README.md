@@ -312,10 +312,7 @@ stale; the badges at the top read them live. See [VERSIONING.md](VERSIONING.md).
 ---
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/yana-banner-dark.svg">
-    <img src="docs/yana-banner-light.svg" alt="Yana AI" width="240">
-  </picture>
+  <img src="assets/yana-hero.svg" alt="Yana AI: AI does the work. You keep authority." width="100%" />
 </p>
 
 <p align="center">

@@ -3,6 +3,42 @@
 Snapshots are listed newest first. Each one was measured fresh; none is
 carried forward from an earlier one.
 
+## 2026-11-16 snapshot
+
+**Machine:** Apple M4 MacBook Air (`Mac16,13`), 16 GB RAM, macOS 27.3.
+**Build:** `yana-rt` 1.5.4, `cargo build --release --bin yana-rt` (default features
+`cli` and `mcp`) at the release commit `c8c29fb2`, binary 23,995,968 bytes (22.9 MiB).
+**Method:** the interleaved method of the 2026-11-15 run published in the technical
+report: one warm-up run, then Rust and Python alternate (Rust, Python, Rust, ...), and
+the median is taken. Peak RSS from `/usr/bin/time -l`. Python column is the
+`core/scripts/*.py` file each Rust command replaces, run with `python3 -I`. The
+token-budget guard runs once per fresh project with the `flock-v1` marker present, so
+every timed call is a first call.
+**Load:** the machine was not idle; load average 5.19 before and 5.00 after.
+
+| Path | Rust | Python | Ratio | Runs | Output parity |
+| --- | ---: | ---: | --- | ---: | --- |
+| `yana-rt --version` startup | 6.17 ms | | | 60 | |
+| `doctor run` vs `doctor.py .` | 152 ms | 209 ms | Rust 1.4x | 12 | not re-checked |
+| `ci check .` vs `ci_check.py .` | 7.16 ms | 34.1 ms | Rust 4.8x | 20 | 6 warnings each |
+| `scan core/skills` vs `audit_scanner.py core/skills` | 0.58 s | 8.60 s | Rust 14.8x | 5 | 1,794 vs 1,825 files, same top finding (SE004); score 37 vs 0 |
+| `scan .` vs `audit_scanner.py .` (defaults) | 0.29 s | 6.89 s | not comparable | 5 | default scopes differ |
+| `guard destructive` (allowed command) | 5.91 ms | | | 40 | |
+| `guard token-budget` (first call) | 5.64 ms | | | 40 | |
+
+| Peak RSS | Rust | Python |
+| --- | ---: | ---: |
+| `scan core/skills` | 16.3 MiB | 25.4 MiB |
+| `scan .` (defaults) | 20.7 MiB | 32.1 MiB |
+
+**Compared with the 2026-11-15 run of 1.5.2** (same method, in the report, not repeated
+here): the ratios hold (`doctor` 1.4x and 1.4x, skills scan 14.8x and 14.5x, `ci check`
+4.8x and 5.4x) and the binary size is unchanged. Rust absolute times are 3 to 47% higher
+(skills scan 0.58 vs 0.56 s, startup 6.17 vs 4.21 ms). This run was on a busier machine,
+and it has not been repeated idle, so the machine's share and the code's share are not
+separated. The token-budget guard is timed for the first time: the October note below
+could not time it because of the missing-marker error, fixed for fresh clones in 1.5.4.
+
 ## 2026-10-20 snapshot
 
 **Machine:** Apple M4 MacBook Air, 16 GB RAM, macOS 27.2.

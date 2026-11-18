@@ -140,38 +140,12 @@ fn reject_if_private_or_link_local(host: &str) -> Result<(), CapabilityError> {
     Ok(())
 }
 
-<<<<<<< HEAD
 fn check_ip(ip: IpAddr) -> Result<(), CapabilityError> {
     // One canonical private-address test for every outbound fetch in the crate:
     // it also covers CGNAT (100.64.0.0/10, where the Alibaba metadata address
     // lives), IPv6 link-local and multicast, and an IPv4 address wrapped in
     // IPv6 (`::ffff:169.254.169.254`), none of which the old local copy caught.
     if crate::design::is_private_ip(ip) {
-=======
-fn is_blocked_v4(v4: std::net::Ipv4Addr) -> bool {
-    v4.is_loopback() || v4.is_link_local() || v4.is_private() || v4.is_unspecified()
-}
-
-fn check_ip(ip: IpAddr) -> Result<(), CapabilityError> {
-    let blocked = match ip {
-        IpAddr::V4(v4) => is_blocked_v4(v4),
-        IpAddr::V6(v6) => {
-            v6.is_loopback()
-                || v6.is_unspecified()
-                || v6.is_unicast_link_local() // fe80::/10
-                || (v6.segments()[0] & 0xfe00) == 0xfc00 // fc00::/7, unique local
-                // An IPv4-mapped (::ffff:a.b.c.d) or IPv4-compatible
-                // (::a.b.c.d) v6 literal must not skip the v4 checks above —
-                // otherwise e.g. `[::ffff:169.254.169.254]` reaches the
-                // cloud metadata endpoint through a filter that only ever
-                // looked at the v6 branch. See network-egress-law.md's
-                // "URL parser confusion" threat class.
-                || v6.to_ipv4_mapped().is_some_and(is_blocked_v4)
-                || v6.to_ipv4().is_some_and(is_blocked_v4)
-        }
-    };
-    if blocked {
->>>>>>> fix/yana-rt-pypi-shim-forkbomb
         return Err(CapabilityError::InvalidInput {
             detail: format!("URL resolves to a blocked internal address ({ip}); refusing to fetch"),
         });
@@ -341,29 +315,6 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-=======
-    fn ipv6_link_local_is_rejected() {
-        assert!(validate_fetch_url("http://[fe80::1]/").is_err());
-    }
-
-    #[test]
-    fn ipv4_mapped_ipv6_metadata_address_is_rejected() {
-        // Same cloud metadata IP as `link_local_metadata_address_is_rejected`,
-        // reached through an IPv4-mapped IPv6 literal instead — must not
-        // bypass the v4 blocklist just by taking the v6 branch.
-        assert!(validate_fetch_url("http://[::ffff:169.254.169.254]/").is_err());
-        assert!(validate_fetch_url("http://[::ffff:127.0.0.1]/").is_err());
-        assert!(validate_fetch_url("http://[::ffff:10.0.0.1]/").is_err());
-    }
-
-    #[test]
-    fn ipv4_mapped_ipv6_public_address_is_allowed() {
-        assert!(validate_fetch_url("http://[::ffff:93.184.215.14]/").is_ok());
-    }
-
-    #[test]
->>>>>>> fix/yana-rt-pypi-shim-forkbomb
     fn public_ip_literal_is_allowed() {
         // 93.184.215.14 is example.com's real, public, stable address —
         // not a private range, so the validator must not reject it.
@@ -416,9 +367,6 @@ mod tests {
         }
     }
 }
-<<<<<<< HEAD
 
 #[cfg(test)]
 mod ssrf_tests;
-=======
->>>>>>> fix/yana-rt-pypi-shim-forkbomb

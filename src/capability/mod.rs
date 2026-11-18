@@ -10,10 +10,7 @@
 pub mod archive;
 pub mod archive_create;
 pub mod browser_fetch;
-<<<<<<< HEAD
 mod checkpoint_hook;
-=======
->>>>>>> fix/yana-rt-pypi-shim-forkbomb
 pub mod cli;
 pub mod command;
 pub mod config_trust;

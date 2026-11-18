@@ -50,7 +50,7 @@
     <td align="center"><h3>4</h3><sub>agent 宿主<br>Claude Code、Codex、Cursor、Antigravity</sub></td>
     <td align="center"><h3>4.2 ms</h3><sub>运行时启动<br>release 构建，Apple M4</sub></td>
     <td align="center"><h3>100</h3><sub>专业 agent</sub></td>
-    <td align="center"><h3>2,035</h3><sub>工作知识 skill，<br>不授予权限</sub></td>
+    <td align="center"><h3>2,036</h3><sub>工作知识 skill，<br>不授予权限</sub></td>
   </tr>
 </table>
 
@@ -130,7 +130,7 @@ core/
 ├── hooks/    # 66 个 PreToolUse / PostToolUse / Stop hook（63 个 shell，3 个 JavaScript）
 ├── rules/    # 71 条规则，大多是 agent 自行遵守的指引，只有一部分由 hook 强制执行
 ├── agents/   # 100 个专业 agent
-├── skills/   # 2,035 个 skill
+├── skills/   # 2,036 个 skill
 ├── commands/ # 170 个 Claude Code 斜杠命令
 └── config/
     └── core-lock.json    # SHA-256 清单，锁定 290 个核心文件

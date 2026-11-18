@@ -6,8 +6,9 @@
 //!
 //! `browser_fetch` is the one exception to "every tool here is
 //! `ApprovalRequirement::None`": it is registered in the real capability
-//! registry as `HumanApprovalPerCall` (BMAD-YANA-CAPABILITY-MATRIX.md row
-//! for `browser.fetch` — it lets the connected MCP client direct a real
+//! registry as `HumanApprovalPerCall` (see the `browser.fetch` descriptor
+//! in `capability::registry_data::all_descriptors`, and BMAD-YANA-CAPABILITY-MATRIX.md
+//! row for `browser.fetch` — it lets the connected MCP client direct a real
 //! outbound request to a URL of its own choosing). MCP's synchronous stdio
 //! transport has no protocol feature for pausing a call to ask a human, so
 //! this tool does not invent one: it goes through the exact same

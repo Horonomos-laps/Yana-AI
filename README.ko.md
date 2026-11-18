@@ -50,7 +50,7 @@
     <td align="center"><h3>4</h3><sub>에이전트 호스트<br>Claude Code, Codex, Cursor, Antigravity</sub></td>
     <td align="center"><h3>4.2 ms</h3><sub>런타임 시작 시간<br>릴리스 빌드, Apple M4</sub></td>
     <td align="center"><h3>100</h3><sub>전문 에이전트</sub></td>
-    <td align="center"><h3>2,035</h3><sub>작업 지식 스킬,<br>권한은 부여하지 않음</sub></td>
+    <td align="center"><h3>2,036</h3><sub>작업 지식 스킬,<br>권한은 부여하지 않음</sub></td>
   </tr>
 </table>
 
@@ -131,7 +131,7 @@ core/
 ├── hooks/    # 66개 PreToolUse / PostToolUse / Stop hook (셸 63, JavaScript 3)
 ├── rules/    # 71개 rule, 대부분 에이전트가 스스로 따르는 지침이고 일부만 hook이 집행
 ├── agents/   # 100개 전문 에이전트
-├── skills/   # 2,035개 스킬
+├── skills/   # 2,036개 스킬
 ├── commands/ # 170개 Claude Code 슬래시 명령
 └── config/
     └── core-lock.json    # SHA-256 manifest, 핵심 파일 290개 고정

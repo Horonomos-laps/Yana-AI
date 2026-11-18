@@ -1611,7 +1611,7 @@
       "localPath": ".claude/skills/building-vulnerability-aging-and-sla-tracking"
     },
     "building-vulnerability-dashboard-with-defectdojo": {
-      "computedHash": "edc84b002e27ae9c00de166514965e9026dc21af0e1dd97a7a30a60ca1161287",
+      "computedHash": "57c0660fe703e33fb44e783ec28cd5d12baffab03e33e61129fa25570c99d677",
       "localPath": ".claude/skills/building-vulnerability-dashboard-with-defectdojo",
       "addedAt": "2026-07-11T02:56:57Z"
     },
@@ -6213,7 +6213,7 @@
     },
     "mattpocock--git-guardrails-claude-code": {
       "addedAt": "2026-07-08T00:00:00Z",
-      "computedHash": "2d081914f2e5f401a6eaef9779b87d6ce8a6890221ebf1957639076d8bde4e48",
+      "computedHash": "1ccd9f2bbb3c99881aa9e21a38356939a1c1c9fee4b71863694b52512c752208",
       "localPath": ".claude/skills/mattpocock--git-guardrails-claude-code"
     },
     "mattpocock--grill-me": {
@@ -8803,32 +8803,32 @@
     },
     "sports--cbb-data": {
       "addedAt": "2026-06-06T06:39:17Z",
-      "computedHash": "c0d8ba353baa6e7d2be83d09aafab2af9e5d9116ef0a0697d68c96f4ddd3fe81",
+      "computedHash": "a3c1acd4d2a7917719f7575704f0c87ab80808cec8273daaa6360c13cca2fa74",
       "localPath": ".claude/skills/sports--cbb-data"
     },
     "sports--cfb-data": {
       "addedAt": "2026-06-11T13:35:13Z",
-      "computedHash": "f9e6bd670bad3afd4fb8d481d2abe00b1dac81b247f1110aaf04d4f44147e615",
+      "computedHash": "b63aff7fa978d610a5c4dc734b21c83ac1d19190071bcb0dfee14330b4ea0164",
       "localPath": ".claude/skills/sports--cfb-data"
     },
     "sports--fastf1": {
       "addedAt": "2026-06-06T06:39:17Z",
-      "computedHash": "2378cf8173d5fff6547857570492a2f28791b05371eb9e2c26dbd149ebda53fa",
+      "computedHash": "5cbc8b43904691efa9b76f73142f3e2e2ac2504d432dc0da3c18193793b53230",
       "localPath": ".claude/skills/sports--fastf1"
     },
     "sports--football-data": {
       "addedAt": "2026-06-11T00:16:23Z",
-      "computedHash": "8fda333920c45582c06f0f0265eb32554285b30c9c83c1a2dd46aeda9d927746",
+      "computedHash": "e9af63917601739c69c419be235dd29f7be3bb6d13608f945bff975dfa7537af",
       "localPath": ".claude/skills/sports--football-data"
     },
     "sports--golf-data": {
       "addedAt": "2026-06-11T13:35:13Z",
-      "computedHash": "6c660ebcea063c9f30aba058dacd5878e18216c1dc0b4bb432f64fd724606b0a",
+      "computedHash": "fb1b1b0a3712c160a8bb1f0a75b85d725ad87a4801685f6cf06df3f40d950fc3",
       "localPath": ".claude/skills/sports--golf-data"
     },
     "sports--kalshi": {
       "addedAt": "2026-06-11T13:19:37Z",
-      "computedHash": "60b1f27a0f14282f13e1cd9df0232f9e613e88211aa4d4f56d48b60bd615146c",
+      "computedHash": "4294792fee666260e9ea5f5e3468c7881f6cf8a2727fb17aa3304f46587fcb07",
       "localPath": ".claude/skills/sports--kalshi"
     },
     "sports--machina": {
@@ -8843,42 +8843,42 @@
     },
     "sports--mlb-data": {
       "addedAt": "2026-06-11T13:35:13Z",
-      "computedHash": "d13804e41c45b589603ecd89c66745a38a8b7bec3bd00c0f3c99ce084e4eb4d0",
+      "computedHash": "70c2becaa8e79810bfe35e62d67a6ee0cc5d42ecac02ef8dbab7cee79100ff72",
       "localPath": ".claude/skills/sports--mlb-data"
     },
     "sports--nba-data": {
       "addedAt": "2026-06-06T06:39:19Z",
-      "computedHash": "07e8187d21fa7764f734423e5d2d8003e94af8f89897a9d64d75f7b80d2a28d8",
+      "computedHash": "e8149d4127ee241487571b81b898c7669d8b4ce22a27cf5387e9b7c5109c94ce",
       "localPath": ".claude/skills/sports--nba-data"
     },
     "sports--nfl-data": {
       "addedAt": "2026-06-28T00:18:27Z",
-      "computedHash": "5d8c4413b70afe481fce8ce2a67961ca9db21d790ff9e331a3f89882ba78f7a7",
+      "computedHash": "dea00ab3a71b13e76d899f07264707223bd49e8acfebed65442cf8a84cccd70d",
       "localPath": ".claude/skills/sports--nfl-data"
     },
     "sports--nhl-data": {
       "addedAt": "2026-06-11T00:16:24Z",
-      "computedHash": "218bf56b3ebd4ca0f54da0a194c11b38016f333fc9f7c5766000e37c1afc4a15",
+      "computedHash": "f90055f18b71e273f690ca5ac5a424c00f32d528cda7aff8294f5f7746d71c86",
       "localPath": ".claude/skills/sports--nhl-data"
     },
     "sports--polymarket": {
       "addedAt": "2026-06-11T13:35:13Z",
-      "computedHash": "d3e601643a77b5d121838196905d17e5290b712af1bf1495d15741c63cccd8ab",
+      "computedHash": "1ab8cb202ca3752fe74ce3758fac11aa116e00e59ac2d424ee7b0a69f25ca5f0",
       "localPath": ".claude/skills/sports--polymarket"
     },
     "sports--sports-news": {
       "addedAt": "2026-06-11T00:16:24Z",
-      "computedHash": "6ea8b39865886acf91b2d4af13a19278f4dc8ce690118435ffbfaefd109998b7",
+      "computedHash": "d81f65d69788c969e0795880c5cdfaca7ba43205f1ce88301f2f9e4ba51cb9d8",
       "localPath": ".claude/skills/sports--sports-news"
     },
     "sports--sports-reporter": {
       "addedAt": "2026-06-11T13:35:13Z",
-      "computedHash": "6a0b372ba7fcad7179c0e05a879378ccbe80a4a59220a69f20618c5254544c3b",
+      "computedHash": "d433be8521ef7b0c4d5756dd35d945a4e8d0991a901b2eab2b5dd101fdd9c78c",
       "localPath": ".claude/skills/sports--sports-reporter"
     },
     "sports--tennis-data": {
       "addedAt": "2026-06-11T00:16:24Z",
-      "computedHash": "00add44a7246741ed2920cc246d1530775a710d4da31c1907b45e5399c3da766",
+      "computedHash": "ff775f65880e25788ff2f24c44afb6d1681ab3521a1c8d4e60186d0c1e5512f3",
       "localPath": ".claude/skills/sports--tennis-data"
     },
     "sports--volleyball-data": {
@@ -8888,12 +8888,12 @@
     },
     "sports--wnba-data": {
       "addedAt": "2026-06-11T00:16:24Z",
-      "computedHash": "870304fbcd116a4330779eb7ee5f6d52817072786fd66468aa4251fd48ce386a",
+      "computedHash": "1f1ec40969b84c8571326966cb18d42fa5817d4e07ea976db0ad6b078dcf1cce",
       "localPath": ".claude/skills/sports--wnba-data"
     },
     "sports--xctf-data": {
       "addedAt": "2026-06-11T00:16:24Z",
-      "computedHash": "4d0d041c6028902e69ff01a3d094531caf4144d2ff7dfee51fb681bacad156e8",
+      "computedHash": "23de8c5d216dbfbd5d77a1352926bbaa9a3d9354e464aeaa253f20bc097e6c95",
       "localPath": ".claude/skills/sports--xctf-data"
     },
     "springboot-patterns": {
@@ -9608,7 +9608,7 @@
     },
     "threejs-skills": {
       "addedAt": "2026-06-06T06:42:13Z",
-      "computedHash": "f820d5c5a4dce492068c3662aa79489e16a3d1eae8f5a3e304bd42e6b9fe7239",
+      "computedHash": "c4e2d679a13bf0db65bfd2442bf112195720eda79545c9eb8c4eb0685fa2fa47",
       "localPath": ".claude/skills/threejs-skills"
     },
     "tinystruct-patterns": {
@@ -10178,6 +10178,11 @@
       "computedHash": "121a0b817d732bcda1e405e9abfc8002e4718cf287c453e89541670362dc5d16",
       "localPath": ".claude/skills/viettranx--3dviz-pro-max",
       "addedAt": "2026-09-11T00:00:00Z"
+    },
+    "ui-ux-multistack": {
+      "computedHash": "33a1a88fea7dc7d8109a2b27e4eb66a7a6110066b568c4675effb119df534dac",
+      "localPath": ".claude/skills/ui-ux-multistack",
+      "addedAt": "2026-11-07T05:16:42Z"
     }
   },
   "total": 2026

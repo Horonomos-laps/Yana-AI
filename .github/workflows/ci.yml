@@ -5,6 +5,16 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # A daily run on main. This workflow installs the latest stable Rust on every
+  # run, so a new Rust release (or any other tool that moves under us) used to
+  # show up only on the next pull request: rustc 1.100.0 broke the integration
+  # tests' binary lookup and the first red run was an unrelated SECURITY.md PR.
+  # A run on main finds it the day it happens. GitHub runs schedules on the
+  # default branch only, and the self-audit step already treats any event that
+  # is not a pull request as a full scan.
+  schedule:
+    - cron: "23 19 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -55,6 +65,16 @@ jobs:
 
       - name: Run hook test suite
         run: bash core/tests/hooks/run-hook-tests.sh
+
+      # Neither suite was run by any workflow, and both failed on a fresh
+      # clone (they copied the gitignored flock-v1 marker from the checkout).
+      # YANA_TEST_REQUIRE_RT=1 makes a missing yana-rt a failure, not a skip.
+      - name: Run token-budget guard/reset hook tests
+        env:
+          YANA_TEST_REQUIRE_RT: "1"
+        run: |
+          bash core/tests/hooks/test-token-budget-reset.sh
+          bash core/tests/hooks/test-token-budget-guard-fallback.sh
 
       - name: Drift check
         run: bash core/scripts/drift-check.sh
@@ -140,6 +160,9 @@ jobs:
 
       - name: Run cutover regression
         run: bash core/tests/locking/test-flock-v1-cutover.sh
+
+      - name: Run fresh-clone bootstrap regression
+        run: bash core/tests/locking/test-flock-v1-fresh-clone.sh
 
       - name: Run cross-language matrix five times
         run: |
@@ -399,7 +422,7 @@ jobs:
 
       - name: Upload SARIF to GitHub Code Scanning
         if: always()
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: yana-ai-self-audit.sarif
           category: yana-ai-self-audit
@@ -432,10 +455,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (node24)
 
+      # Run cargo audit directly. The rustsec/audit-check action did the same scan, then called the
+      # GitHub check-runs API to publish its own check, and that call failed now and then with a 404
+      # (the scan itself was clean) and turned this job red. Warnings (unmaintained, unsound) do not fail
+      # cargo audit; a vulnerability does. The ignore list is the one the action used.
       - name: Run cargo audit
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cargo install cargo-audit --version 0.23.0 --locked
+          cargo audit --file Cargo.lock --ignore RUSTSEC-2026-0459 --ignore RUSTSEC-2026-0457 --ignore RUSTSEC-2026-0462
 
       # Same coverage gap as cargo audit above, for the Python side: this
       # repo publishes a PyPI package (pyproject.toml) whose own
@@ -486,19 +513,6 @@ jobs:
               print(dep)
           PY
           pip-audit --requirement /tmp/runtime-requirements.txt
-
-      - name: Set up Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-
-      - name: Run npm audit (yana-web production dependencies)
-        working-directory: tools/yana-web
-        run: npm audit --omit=dev --package-lock-only
-
-      - name: Run npm audit (yana-desktop production dependencies)
-        working-directory: tools/yana-desktop
-        run: npm audit --omit=dev --package-lock-only
 
   # Authority Hardening item #10: release.yml and publish.yml both read
   # .github/required-checks.json instead of hard-coding their own copy of
@@ -571,9 +585,6 @@ jobs:
           python3 -m pip install -r requirements-dev.txt
           cargo build --features cli --bin yana-rt
           python3 -m pytest tests -q
-
-      - name: yana-web static path tests
-        run: node tools/yana-web/_test_static_path.js
 
   required-checks-drift:
     name: Required Checks Manifest Drift

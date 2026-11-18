@@ -71,9 +71,11 @@ jobs:
           done < <(python3 -c "import json; print('\n'.join(json.load(open('.github/required-checks.json'))['required_checks']))")
           FAILED=0
           for name in "${REQUIRED[@]}"; do
-            # --paginate: see desktop.yml's verify-provenance job for why
-            # this is required, not optional, once a commit accumulates
-            # more than gh api's default 30-item page of check-runs.
+            # --paginate is required, not optional, once a commit accumulates
+            # more than gh api's default 30-item page of check-runs: without it
+            # required checks that land on page 2+ are reported as "none found"
+            # even though they succeeded (a real bug, found live while
+            # desktop.yml, since removed, was being dispatched).
             conclusion=$(gh api --paginate "repos/${{ github.repository }}/commits/$SHA/check-runs" --jq ".check_runs[] | select(.name==\"$name\") | .conclusion" | head -1)
             if [[ "$conclusion" != "success" ]]; then
               echo "::error::Required check '$name' did not succeed for commit $SHA (conclusion: ${conclusion:-none found})"
@@ -135,6 +137,15 @@ jobs:
       # not in the default feature set, because it pulls in tokio and rmcp and the default set is also
       # what the WASM library builds with. Shipped binaries opt in here; the smoke test below
       # requires the subcommand to answer, so a build that forgets this flag cannot publish.
+      # build.rs downloads pdfium itself and has failed on a TLS handshake; fetch it with curl,
+      # checked against a pinned SHA-256. The asset follows the TARGET (x86_64-apple-darwin is built
+      # on an arm64 runner), and Windows is left to build.rs.
+      - name: Prefetch pdfium
+        if: runner.os != 'Windows'
+        env:
+          PDFIUM_TARGET: ${{ matrix.target }}
+        run: bash core/scripts/prefetch-pdfium.sh
+
       - name: Build
         run: cargo build --release --target ${{ matrix.target }} --features cli,mcp
 
@@ -245,13 +256,25 @@ jobs:
           EOF
           cat "${{ matrix.asset }}.manifest.json"
 
+      # action-gh-release uploads each file under its own file name and has no
+      # asset_name input, so the three Unix legs all uploaded a file named
+      # "yana-rt" and overwrote one another (v1.4.2 and v1.5.4 ended up with one
+      # unnamed Unix binary next to four platform manifests). Copy the binary to
+      # its platform name first, so the asset matches its manifest.
+      - name: Stage the binary under its platform name
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "dist/${{ matrix.asset }}"
+          ls -l "dist/${{ matrix.asset }}"
+
       - name: Upload binary to Release
         # Only on the real tag-push trigger -- a workflow_dispatch run (see
         # the `on:` block's comment) has no tag to attach a release to.
         if: github.event_name == 'push'
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: |
-            target/${{ matrix.target }}/release/${{ matrix.binary }}
+            dist/${{ matrix.asset }}
             ${{ matrix.asset }}.manifest.json
-          asset_name: ${{ matrix.asset }}

@@ -1,6 +1,6 @@
 [package]
 name = "yana-rt"
-version = "1.5.2"
+version = "1.5.4"
 edition = "2021"
 description = "Yana AI Runtime — safety CLI for AI agents: scan, graph, vault, hunt, ci, map, fix, doctor"
 license = "Apache-2.0"
@@ -33,7 +33,8 @@ test = false
 # spawns this as a plain child process and talks to it over stdin/
 # stdout, no native Node module required. Deliberately generic (spawns
 # whatever argv it's given), not chat-specific. See
-# tools/yana-desktop/main.js for the Electron side.
+# yana-desktop/main.js in the yana-web repository for the Electron side
+# (Yana Desktop is retired; that copy is kept for reference).
 [[bin]]
 name = "pty_bridge"
 path = "src/bin/pty_bridge.rs"
@@ -45,16 +46,11 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["cli"]
+default = ["cli", "mcp"]
 cli = [
   "clap", "uuid", "chrono", "shell-words", "glob", "walkdir",
-<<<<<<< HEAD
   "anyhow", "unicode-normalization", "liteparse", "ureq", "noyalib", "sha2",
   "ratatui", "crossterm", "url", "unicode-width",
-=======
-  "anyhow", "unicode-normalization", "liteparse", "ureq", "serde_yml", "sha2",
-  "ratatui", "crossterm", "url",
->>>>>>> fix/yana-rt-pypi-shim-forkbomb
   "tree-sitter", "tree-sitter-rust", "tree-sitter-typescript",
   "tree-sitter-javascript", "tree-sitter-python", "tree-sitter-go",
   "flock-v1",
@@ -64,17 +60,12 @@ cli = [
 # feature so a build without SQLite is still possible; it is part of `cli`.
 session-db = ["rusqlite", "unicode-normalization", "chrono"]
 wasm = ["wasm-bindgen", "js-sys"]
-# Program J (docs/programs/PROGRAM-J-SKELETON.md) Phase 9 Research/Prototype
-# spike ONLY — not wired into any live client path, not part of default
-# `cli`. Deliberately isolated: rmcp pulls in tokio (this crate's first
-# async runtime dependency, confirmed via docs.rs before adding this —
-# every other feature above is sync), and a spike shouldn't change the
-# default build's footprint or introduce an async runtime into code that
-# doesn't need one yet. `features = ["full"]` on tokio here is a spike
-# convenience, not a Phase 10 recommendation — trim to the actual
-# required feature set (rt-multi-thread/macros/io-std, likely) once this
-# graduates past prototype.
-mcp = ["rmcp", "tokio"]
+# The MCP server (`yana-rt mcp`) and client (`mcp.call`). Part of the default build since
+# 2026-10: release binaries already shipped it (`--features cli,mcp`), while a plain
+# `cargo install` did not, so the same version behaved differently depending on how it was
+# built. rmcp pulls in tokio, the only async runtime dependency of the main build; builds
+# that must stay sync use `--no-default-features`. `sha2` is for the tool-definition pins.
+mcp = ["rmcp", "tokio", "sha2"]
 # The read-only language-server client (docs/contracts/ws3-tools.md section 17). It
 # needs the async runtime but not the MCP protocol crate, so it does not depend on `mcp`.
 lsp = ["tokio"]
@@ -118,44 +109,41 @@ noyalib    = { version = "0.0.58",                   optional = true }
 sha2       = { version = "0.10",                     optional = true }
 libc       = { version = "0.2",                      optional = true }
 url        = { version = "2",                        optional = true }
-<<<<<<< HEAD
 # SQLite for the session database (WS4). Pinned exactly (rule 44) and with
 # default features off, so the optional statement cache and its `hashlink`
 # dependency stay out. `bundled` compiles SQLite from C source (libsqlite3-sys
 # uses the `cc` crate) instead of linking a system library.
-rusqlite   = { version = "=0.40.2", default-features = false, features = ["bundled"], optional = true }
-=======
->>>>>>> fix/yana-rt-pypi-shim-forkbomb
+rusqlite   = { version = "=0.41.1", default-features = false, features = ["bundled"], optional = true }
 # TUI for `yana chat` — synchronous poll/read API only, deliberately not
 # opting into crossterm's `event-stream` feature (would pull in async/
 # futures plumbing this crate has nowhere else).
 ratatui    = { version = "0.30",                     optional = true }
 # Display width of a character, for the fixed-grid approval prompts. Pinned to
 # the exact version ratatui already resolves to, so the build gains no package.
-unicode-width = { version = "=0.2.2", default-features = false, optional = true }
+unicode-width = { version = "=0.2.3", default-features = false, optional = true }
 crossterm  = { version = "0.29",                     optional = true }
 # src/graph/build.rs import extraction — replaces per-language regex
 # (2026-07-23, Wave 0 finding #2 follow-up: the regex approach was the
 # root cause of the graph's noisy/wrong edges, not just the unanchored
 # path-matching bug already fixed in resolve_import()).
-tree-sitter            = { version = "0.26.11", optional = true }
+tree-sitter            = { version = "0.27.2", optional = true }
 tree-sitter-rust       = { version = "0.24.2",  optional = true }
 tree-sitter-typescript = { version = "0.23.2",  optional = true }
 tree-sitter-javascript = { version = "0.25.0",  optional = true }
 tree-sitter-python     = { version = "0.25.0",  optional = true }
 tree-sitter-go         = { version = "0.25.0",  optional = true }
 
-# Program J Phase 9 spike only (see `mcp` feature above) — pinned to the
-# stable 2.2.0 line, not crates.io's max_version 3.0.0-beta.1, per Phase 8
-# Design Review's own finding: a beta dependency on a security-critical
-# guard path is a real risk, not a style preference.
-rmcp  = { version = "=2.2.0", features = ["server", "transport-io", "client"], optional = true }
+# MCP server and client (see `mcp` feature above). Pinned to one exact stable
+# release (`=3.6.0`), never a pre-release, per Phase 8 Design Review's own
+# finding: a beta dependency on a security-critical guard path is a real
+# risk, not a style preference. Bump it deliberately, together with Cargo.lock.
+rmcp  = { version = "=3.9.0", features = ["server", "transport-io", "client"], optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 
 # Discord remote adapter only (see `discord` feature above). Sync WebSocket
 # client with rustls (matches this crate's existing TLS choice elsewhere,
 # no new TLS stack), native-tls disabled.
-tungstenite = { version = "0.24", default-features = false, features = ["handshake", "rustls-tls-native-roots"], optional = true }
+tungstenite = { version = "0.30", default-features = false, features = ["handshake", "rustls-tls-native-roots"], optional = true }
 # Explicit crypto-provider install for tungstenite's gateway connection —
 # see `ensure_crypto_provider_installed`'s doc comment in discord.rs for
 # why this is needed despite `tungstenite` already depending on rustls

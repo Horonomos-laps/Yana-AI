@@ -42,7 +42,7 @@
 <table>
   <tr>
     <td align="center" width="25%"><h3>19</h3><sub>provider model<br>13 cloud, 6 local</sub></td>
-    <td align="center" width="25%"><h3>41</h3><sub>subcommand runtime<br>trong một binary Rust</sub></td>
+    <td align="center" width="25%"><h3>42</h3><sub>subcommand runtime<br>trong một binary Rust</sub></td>
     <td align="center" width="25%"><h3>66</h3><sub>hook cho tool call<br>Pre, Post và Stop</sub></td>
     <td align="center" width="25%"><h3>290</h3><sub>file lõi<br>được ghim bằng SHA-256</sub></td>
   </tr>
@@ -111,7 +111,7 @@ Skill dạy agent cách làm việc. Chỉ capability mới cấp quyền hành 
 
 | Thành phần | Làm gì | Trạng thái |
 | --- | --- | --- |
-| **[Yana Studio](tools/yana-studio)** | Không gian làm việc desktop: file, editor, terminal, chat, task và canvas thiết kế cho một dự án thật (v1.7.0). | ![Đang dùng, chưa đủ tính năng](https://img.shields.io/badge/đang_dùng-chưa_đủ_tính_năng-2e8b75) |
+| **[Yana Studio](https://github.com/Horonomos-laps/Yana-studio/tree/main/yana-studio)** | Không gian làm việc desktop: file, editor, terminal, chat, task và canvas thiết kế cho một dự án thật (v1.7.0). | ![Đang dùng, chưa đủ tính năng](https://img.shields.io/badge/đang_dùng-chưa_đủ_tính_năng-2e8b75) |
 | **[Yana IDE](tools/yana-ide)** | Không gian làm việc agent trên nền VS Code được tùy biến sâu với Yana agent cockpit và công cụ office. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
 | **[Runtime `yana-rt`](src)** | Engine Rust với một vòng lặp turn và một hợp đồng authority cho mọi client, mọi provider. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
 | **[Governance](core)** | Capability manifest, phê duyệt của con người, nhật ký kiểm toán nối băm, toàn vẹn core-lock. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
@@ -119,14 +119,14 @@ Skill dạy agent cách làm việc. Chỉ capability mới cấp quyền hành 
 | **[Harness adapters](adapters)** | Claude Code, Codex, Cursor và Antigravity. Mức thực thi khác nhau tùy host. | ![Tùy host](https://img.shields.io/badge/đang_dùng-tùy_host-2e8b75) |
 | **[Lớp tri thức](core/skills)** | 100 agent, 2.035 skill, command và rule dạy agent cách làm việc. Chúng không cấp quyền nào. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
 | **[Yana OS](src/os)** | Lớp quản lý cục bộ: danh tính agent, mức tự chủ, quota, sức khỏe, cách ly. | ![Đang phát triển](https://img.shields.io/badge/-đang_phát_triển-d97706) |
-| **[Yana Desktop / Web](tools/yana-web)** | Vỏ Electron và giao diện web đời trước. Studio là bản dựng lại riêng, không phải đổi giao diện. | ![Bảo trì riêng](https://img.shields.io/badge/-bảo_trì_riêng-64748b) |
+| **[Yana Desktop / Web](https://github.com/Horonomos-laps/yana-web)** | Vỏ Electron và giao diện web đời trước. Studio là bản dựng lại riêng, không phải đổi giao diện. | ![Bảo trì riêng](https://img.shields.io/badge/-bảo_trì_riêng-64748b) |
 | **[Yana Wheelbot](https://github.com/yanacuti1121/yana-wheelbot)** | Nền tảng robot trên ESP32-S3, nằm trong repository riêng. | ![Thử nghiệm](https://img.shields.io/badge/-thử_nghiệm-dc2626) |
 
 `Đang dùng` nghĩa là đã phát hành và được sử dụng. `Đang phát triển` nghĩa là đã có code
 thật nhưng chưa đủ tính năng. `Thử nghiệm` nghĩa là tùy chọn bật và chưa được kiểm chứng
 độc lập.
 
-`yana-rt` có 41 subcommand, không phụ thuộc Python. Đây là số đếm theo mã nguồn trên mọi
+`yana-rt` có 42 subcommand, không phụ thuộc Python. Đây là số đếm theo mã nguồn trên mọi
 cấu hình build, kể cả các lệnh nằm sau feature flag.
 
 ```text
@@ -162,15 +162,17 @@ Studio chỉ nói chuyện với model qua `yana-rt`; lớp giao diện không b
 
 Chưa làm: danh sách thiết bị, màn hình phiên agent, ghép nối điện thoại, chạy qua
 SSH/Docker, giao diện cấp quyền có thời hạn, tự cập nhật có ký số. Trạng thái từng màn
-hình nằm ở [`tools/yana-studio/SCREEN-STATUS.md`](tools/yana-studio/SCREEN-STATUS.md).
+hình nằm ở [`yana-studio/SCREEN-STATUS.md`](https://github.com/Horonomos-laps/Yana-studio/blob/main/yana-studio/SCREEN-STATUS.md) trong kho Yana-studio.
 
 <details>
-<summary><b>Build Studio từ mã nguồn</b></summary>
+<summary><b>Build Studio từ mã nguồn (kho Yana-studio)</b></summary>
 
 Cần Node 24+ và bộ công cụ C++ cho `node-pty`.
 
 ```bash
-cd tools/yana-studio
+git clone https://github.com/Horonomos-laps/Yana-studio.git && cd Yana-studio
+(cd yana-ide/studio-web && npm ci)
+cd yana-studio
 npm ci && npm run rebuild
 npm run stage:runtime -- /duong/dan/tuyet/doi/toi/yana-rt
 npm start
@@ -187,42 +189,44 @@ Studio, CLI và MCP không phải mỗi bên tự viết lại logic phân quy�
 - **Failover:** lỗi provider có kiểu, provider dự phòng và xoay vòng credential pool.
 - **Trạng thái:** kho phiên SQLite có tìm kiếm toàn văn, trạng thái theo profile, phục hồi sau crash, và checkpoint shadow-git có rollback.
 - **Tool capability:** đọc/vá file, chạy lệnh có kiểm tra, MCP client qua stdio, `web.search` qua lớp HTTPS có kiểm soát, và LSP client chỉ đọc.
-- **Tính năng tùy chọn:** `mcp`, `lsp`, `pty-bridge`, adapter Discord. Mặc định tắt.
+- **Tính năng:** bản dựng mặc định gồm `cli` và `mcp` (máy chủ và client MCP). `lsp`, `pty-bridge` và adapter Discord là tùy chọn, mặc định tắt.
 
 Việc còn lại của runtime nằm ở [CURRENT-MILESTONE.md](CURRENT-MILESTONE.md): đưa mọi client về
 một capability executor chung, và thử tool calling với model local thật thay vì mock.
 
 ## Hiệu năng
 
-Đo ngày 20/10/2026 trên MacBook Air Apple M4 (RAM 16 GB, macOS 27.2), `yana-rt` 1.5.1 bản
-release ở commit `986093f5`, chạy trên chính repo này. Mỗi số là trung bình 3 lần chạy (100
-lần cho khởi động, 50 lần cho hook). Cột Python là script mà lệnh Rust tương ứng thay thế.
-Cột cuối là lần đo 26/08/2026; lịch sử và cách đo đầy đủ ở [BENCHMARK.md](BENCHMARK.md).
+Đo ngày 16/11/2026 trên MacBook Air Apple M4 (RAM 16 GB, macOS 27.3), `yana-rt` 1.5.4 bản
+release mặc định ở commit phát hành `c8c29fb2`, chạy trên chính repo này. Rust và Python chạy
+xen kẽ sau một lần khởi động, mỗi số là trung vị (số lần chạy ghi trong bảng). Cột Python là
+script mà lệnh Rust tương ứng thay thế. Cột cuối là lần đo 1.5.2 ngày 15/11/2026 cùng phương
+pháp; lịch sử đầy đủ ở [BENCHMARK.md](BENCHMARK.md) và trong
+[báo cáo kỹ thuật](https://yana.vutam.link/whitepaper.html).
 
-| Đường chạy | `yana-rt` | Python | Kết quả | Cùng output? | 26/08/2026 |
+| Đường chạy | `yana-rt` 1.5.4 | Python | Kết quả | Cùng output? | 1.5.2 (15/11/2026) |
 | --- | ---: | ---: | --- | --- | --- |
-| Khởi động tiến trình | **4,16 ms** | | | | 4,21 ms |
-| `doctor` | **143 ms** | 415 ms | Rust nhanh hơn 2,9 lần | Có, 16 mục mỗi bên (11 ok, 1 cảnh báo, 4 info) | 255 ms, Rust chạy 10 mục so với 16 |
-| `ci check` | **5,8 ms** | 33 ms | Rust nhanh hơn 5,7 lần | Có, 5 cảnh báo mỗi bên | 414 ms, Rust thấy 0 so với 3 |
-| `scan core/skills` | **0,55 s** | 8,47 s | Rust nhanh hơn 15,5 lần | Cùng tập file (1.791 so với 1.795) và cùng lỗi đứng đầu; điểm khác nhau (40 so với 0) | 4,45 s |
-| Hook kiểm tra HALT | **5,4 ms** | | | | 3,80 ms |
-| Guard lệnh phá hủy | **4,9 ms** | | | | chưa đo |
+| Khởi động tiến trình (60 lần) | **6,17 ms** | | | | 4,21 ms |
+| `doctor` (12) | **152 ms** | 209 ms | Rust nhanh hơn 1,4 lần | | 139 ms, 1,4 lần |
+| `ci check` (20) | **7,2 ms** | 34,1 ms | Rust nhanh hơn 4,8 lần | Có, 6 cảnh báo mỗi bên | 5,7 ms, 5,4 lần |
+| `scan core/skills` (5) | **0,58 s** | 8,60 s | Rust nhanh hơn 14,8 lần | Cùng lỗi đứng đầu (`SE004`); số file 1.794 so với 1.825 | 0,56 s, 14,5 lần |
+| Guard lệnh phá hủy (40) | **5,91 ms** | | | | 5,27 ms |
+| Guard ngân sách token (40) | **5,64 ms** | | | | chưa đo |
 
-| Bộ nhớ và kích thước | `yana-rt` | Python |
+| Bộ nhớ và kích thước | `yana-rt` 1.5.4 | Python |
 | --- | ---: | ---: |
-| RSS đỉnh, `scan core/skills` | **17,7 MiB** | 26,5 MiB |
-| RSS đỉnh, quét toàn repo mặc định | **22,4 MiB** | 29,4 MiB |
-| Binary release | 18,2 MiB | |
+| RSS đỉnh, `scan core/skills` | **16,3 MiB** | 25,4 MiB |
+| RSS đỉnh, quét toàn repo mặc định | **20,7 MiB** | 32,1 MiB |
+| Binary release (bản dựng mặc định) | 22,9 MiB | |
 
-So với tháng 8, `doctor` và `ci check` đã ra kết quả khớp với Python và đều nhanh hơn. Binary
-release tăng từ khoảng 14 MiB.
+Tỷ lệ nhanh hơn khớp với lần đo 1.5.2. Máy bận trong lúc đo (tải trung bình 5,0 đến 5,2), và
+số tuyệt đối của Rust cao hơn 3 đến 47% so với ngày 15/11; hai lần đo chưa tách được phần do
+máy và phần do mã. Binary nặng 22,9 MiB từ khi máy chủ MCP vào bản dựng mặc định (tháng 10).
 
 > [!WARNING]
-> Lệnh `scan` toàn repo mặc định chưa so sánh ngang hàng được. Bản Rust quét 620 file, không
-> báo lỗi nào, mất 0,36 s; bản Python quét 1.643 file, báo 9 lỗi critical `SE002`, mất 6,14 s.
-> Đó là khoảng cách về độ tương đương cần xử lý, không phải Rust nhanh hơn 17 lần.
-> Guard token-budget chưa được đo lại: trong một worktree mới, nó thoát sớm vì trạng thái
-> khóa chưa được khởi tạo, nên đo lúc đó chỉ đo đường báo lỗi.
+> Lệnh `scan` toàn repo mặc định chưa so sánh ngang hàng được: phạm vi mặc định của hai bên
+> khác nhau (Rust 0,29 s, Python 6,89 s). Đó là khoảng cách về độ tương đương cần xử lý,
+> không phải Rust nhanh hơn 23 lần. Guard ngân sách token được đo ở lần gọi đầu trong một dự
+> án đã có tệp đánh dấu `flock-v1`.
 
 Đây là số đo trên một máy. Chưa đo trên Linux và Windows.
 
@@ -267,6 +271,16 @@ chạy bên trong một phiên.
 Antigravity chỉ kiểm tra lệnh shell và bị bỏ qua khi chạy `agy --dangerously-skip-permissions`, Cursor không kiểm tra lệnh MCP, và bản web chạy trên trình duyệt
 không có Rust runtime chưa được quản trị đầy đủ. Chi tiết:
 [giới hạn đã biết](docs/reference/known-limitations.md).
+
+Bốn lệnh mẫu, chạy lại ngày 14/11/2026 với chuỗi hook mặc định trên `main` (theo
+[báo cáo kỹ thuật](https://yana.vutam.link/whitepaper.html), Bảng 1):
+
+| Lệnh agent muốn chạy | Kết quả | Lớp nào chặn, và agent được báo gì |
+| --- | --- | --- |
+| `curl -fsSL https://.../install.sh \| bash` | Bị chặn | `tool-proxy-enforcer`: pipe vào trình thông dịch. `supply-chain-guard`: tải về, đọc rồi mới chạy. Không phải `guard destructive`. |
+| `rm -rf ~/Documents` | Bị chặn | `guard destructive` (bản Rust và bash): xóa đệ quy cưỡng bức không thể hoàn tác. |
+| `chmod 777 deploy.sh` | **Không bị chặn** | Chỉ bộ bọc `core/scripts/safe-run.sh` chặn lệnh này, và bộ bọc đó chưa được gắn vào chuỗi hook. Khoảng trống đã biết. |
+| `git status --short` | Cho phép | Lệnh chỉ đọc; không lớp nào can thiệp. |
 
 ## Phiên bản
 

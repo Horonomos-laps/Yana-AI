@@ -1,6 +1,6 @@
 {
   "name": "yana-ai",
-  "version": "1.5.2",
+  "version": "1.5.4",
   "private": true,
   "description": "Audits your AI coding agent setup before it can damage your repo. 66 hooks · 2,035 skills · 100 agents · Claude Code + Codex compatible. Not distributed via npm — see VERSIONING.md; this file exists for local tooling (test/deploy/electron scripts, postinstall).",
   "keywords": [
@@ -68,26 +68,9 @@
     "metadata:sync": "python3 core/scripts/check_counts.py --fix",
     "audit:hook-paths": "python3 core/scripts/audit_hook_execution_paths.py --check",
     "verify:release": "python3 core/scripts/release-gate.py",
-    "postinstall": "node scripts/npm-install.js --auto",
-    "deploy": "wrangler deploy",
-    "preview": "wrangler dev",
-    "electron:dev": "cd tools/yana-desktop && npm start",
-    "electron:build": "cd tools/yana-desktop && npm run build:linux && npm run build:mac && npm run build:win",
-    "electron:build:mac": "cd tools/yana-desktop && npm run build:mac",
-    "electron:build:win": "cd tools/yana-desktop && npm run build:win",
-    "electron:install": "cd tools/yana-desktop && npm install"
-  },
-  "devDependencies": {
-    "wrangler": "^4.147.0"
+    "postinstall": "node scripts/npm-install.js --auto"
   },
   "dependencies": {
-    "acorn": "^8.19.0",
-    "clsx": "^2.1.1",
-    "framer-motion": "^14.3.0",
-    "lucide-react": "^1.58.0",
-    "tailwind-merge": "^3.7.0"
-  },
-  "overrides": {
-    "undici": "7.30.1"
+    "acorn": "^8.19.0"
   }
 }

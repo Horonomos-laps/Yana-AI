@@ -42,7 +42,7 @@
 <table>
   <tr>
     <td align="center" width="25%"><h3>19</h3><sub>模型 provider<br>云端 13，本地 6</sub></td>
-    <td align="center" width="25%"><h3>41</h3><sub>运行时子命令<br>同一个 Rust 二进制</sub></td>
+    <td align="center" width="25%"><h3>42</h3><sub>运行时子命令<br>同一个 Rust 二进制</sub></td>
     <td align="center" width="25%"><h3>66</h3><sub>工具调用 hook<br>Pre、Post、Stop</sub></td>
     <td align="center" width="25%"><h3>290</h3><sub>核心文件<br>以 SHA-256 锁定</sub></td>
   </tr>
@@ -109,20 +109,20 @@ Skill 教 agent 如何工作。只有 capability 才能授予行动的权限。
 
 | 组件 | 作用 | 状态 |
 | --- | --- | --- |
-| **[Yana Studio](tools/yana-studio)** | 面向真实项目的桌面工作区：文件、编辑器、终端、聊天、任务和设计画布。 | ![已上线，部分功能](https://img.shields.io/badge/已上线-部分功能-2e8b75) |
+| **[Yana Studio](https://github.com/Horonomos-laps/Yana-studio/tree/main/yana-studio)** | 面向真实项目的桌面工作区：文件、编辑器、终端、聊天、任务和设计画布。 | ![已上线，部分功能](https://img.shields.io/badge/已上线-部分功能-2e8b75) |
 | **[运行时 `yana-rt`](src)** | Rust 引擎，为所有客户端和所有 provider 提供同一个 turn 循环和同一份 authority 契约。 | ![已上线](https://img.shields.io/badge/-已上线-2e8b75) |
 | **[Governance](core)** | Capability 清单、人工审批、哈希链审计日志、core-lock 完整性。 | ![已上线](https://img.shields.io/badge/-已上线-2e8b75) |
 | **[Giám Thị](#giám-thị)** | 运行在所有 AI 会话之外的监督者，发现偏差后阻止之后的每一次工具调用。 | ![已上线，需手动开启](https://img.shields.io/badge/已上线-需手动开启-2e8b75) |
 | **[Harness 适配器](adapters)** | Claude Code、Codex、Cursor 与 Antigravity。执行强度因宿主而异。 | ![因宿主而异](https://img.shields.io/badge/已上线-因宿主而异-2e8b75) |
 | **[知识层](core/skills)** | 教 agent 如何工作的 agent、skill、命令和规则。它们不授予任何权限。 | ![已上线](https://img.shields.io/badge/-已上线-2e8b75) |
 | **[Yana OS](src/os)** | 本地管理平面：agent 身份、自主等级、配额、健康状态、隔离。 | ![开发中](https://img.shields.io/badge/-开发中-d97706) |
-| **[Yana Desktop / Web](tools/yana-web)** | 早期的 Electron 外壳和 Web 界面。Studio 是另行重建的，不是换皮。 | ![单独维护](https://img.shields.io/badge/-单独维护-64748b) |
+| **[Yana Desktop / Web](https://github.com/Horonomos-laps/yana-web)** | 早期的 Electron 外壳和 Web 界面。Studio 是另行重建的，不是换皮。 | ![单独维护](https://img.shields.io/badge/-单独维护-64748b) |
 | **[Yana Wheelbot](https://github.com/yanacuti1121/yana-wheelbot)** | 基于 ESP32-S3 的机器人平台，位于独立仓库。 | ![实验性](https://img.shields.io/badge/-实验性-dc2626) |
 
 `已上线`表示已经发布并在使用。`开发中`表示已有真实代码但功能尚不完整。`实验性`表示需要手动开启，
 且尚未经过独立验证。
 
-`yana-rt` 有 41 个子命令，不依赖 Python。这是按源码统计、覆盖所有构建配置（包括 feature flag
+`yana-rt` 有 42 个子命令，不依赖 Python。这是按源码统计、覆盖所有构建配置（包括 feature flag
 之后的命令）的数量。
 
 ```text
@@ -157,15 +157,17 @@ core/
 | **治理遥测** | 什么被允许，什么被阻止，以及原因。 |
 
 尚未实现：设备列表、agent 会话界面、手机配对、SSH/Docker 执行、限时授权界面、带签名的自动更新。
-各界面状态见 [`tools/yana-studio/SCREEN-STATUS.md`](tools/yana-studio/SCREEN-STATUS.md)。
+各界面状态见 Yana-studio 仓库中的 [`yana-studio/SCREEN-STATUS.md`](https://github.com/Horonomos-laps/Yana-studio/blob/main/yana-studio/SCREEN-STATUS.md)。
 
 <details>
-<summary><b>从源码构建 Studio</b></summary>
+<summary><b>从源码构建 Studio（Yana-studio 仓库）</b></summary>
 
 需要 Node 24+ 以及用于 `node-pty` 的 C++ 工具链。
 
 ```bash
-cd tools/yana-studio
+git clone https://github.com/Horonomos-laps/Yana-studio.git && cd Yana-studio
+(cd yana-ide/studio-web && npm ci)
+cd yana-studio
 npm ci && npm run rebuild
 npm run stage:runtime -- /yana-rt/的/绝对/路径
 npm start
@@ -182,41 +184,42 @@ npm start
 - **故障转移：** 带类型的 provider 错误、备用 provider 和凭据池轮换。
 - **状态：** 支持全文检索的 SQLite 会话存储、按配置文件区分的状态、崩溃恢复，以及可回滚的 shadow-git 检查点。
 - **Capability 工具：** 文件读取/补丁、经过校验的命令执行、基于 stdio 的 MCP 客户端、经受检 HTTPS 层的 `web.search`，以及只读 LSP 客户端。
-- **可选功能：** `mcp`、`lsp`、`pty-bridge`、Discord 远程适配器。默认构建中关闭。
+- **功能：** 默认构建包含 `cli` 和 `mcp`（MCP 服务器与客户端）。`lsp`、`pty-bridge` 和 Discord 远程适配器为可选功能，默认关闭。
 
 运行时的剩余工作见 [CURRENT-MILESTONE.md](CURRENT-MILESTONE.md)：把所有客户端统一到同一个
 capability 执行器，以及用真实本地模型而不是 mock 测试工具调用。
 
 ## 性能
 
-2026-10-20 在 Apple M4 MacBook Air（16 GB 内存，macOS 27.2）上，用提交 `986093f5` 的 `yana-rt`
-1.5.1 release 构建，以本仓库为对象测量。每个数值为 3 次运行的平均值（启动 100 次，hook 50 次）。
-Python 一列是对应 Rust 命令所替代的脚本。最后一列为 2026-08-26 的测量值，完整历史和方法见
-[BENCHMARK.md](BENCHMARK.md)。
+2026-11-16 在 Apple M4 MacBook Air（16 GB 内存，macOS 27.3）上，用发布提交 `c8c29fb2` 的
+`yana-rt` 1.5.4 默认 release 构建，以本仓库为对象测量。Rust 与 Python 在一次预热后交替运行，
+每个数值为中位数（运行次数见表）。Python 一列是对应 Rust 命令所替代的脚本。最后一列为
+2026-11-15 用同一方法测得的 1.5.2；完整历史见 [BENCHMARK.md](BENCHMARK.md) 和
+[技术报告](https://yana.vutam.link/whitepaper-en.html)。
 
-| 路径 | `yana-rt` | Python | 结果 | 输出一致？ | 2026-08-26 |
+| 路径 | `yana-rt` 1.5.4 | Python | 结果 | 输出一致？ | 1.5.2（2026-11-15） |
 | --- | ---: | ---: | --- | --- | --- |
-| 进程启动 | **4.16 ms** | | | | 4.21 ms |
-| `doctor` | **143 ms** | 415 ms | Rust 快 2.9 倍 | 是，双方各 16 项（11 ok、1 警告、4 info） | 255 ms，Rust 10 项对 16 项 |
-| `ci check` | **5.8 ms** | 33 ms | Rust 快 5.7 倍 | 是，双方各 5 条警告 | 414 ms，Rust 0 条对 3 条 |
-| `scan core/skills` | **0.55 s** | 8.47 s | Rust 快 15.5 倍 | 文件基本相同（1,791 对 1,795），首要发现相同；评分不同（40 对 0） | 4.45 s |
-| HALT 检查 hook | **5.4 ms** | | | | 3.80 ms |
-| 破坏性命令 guard | **4.9 ms** | | | | 未测量 |
+| 进程启动（60 次） | **6.17 ms** | | | | 4.21 ms |
+| `doctor`（12） | **152 ms** | 209 ms | Rust 快 1.4 倍 | | 139 ms，1.4 倍 |
+| `ci check`（20） | **7.2 ms** | 34.1 ms | Rust 快 4.8 倍 | 是，双方各 6 条警告 | 5.7 ms，5.4 倍 |
+| `scan core/skills`（5） | **0.58 s** | 8.60 s | Rust 快 14.8 倍 | 首要发现相同（`SE004`）；文件数 1,794 对 1,825 | 0.56 s，14.5 倍 |
+| 破坏性命令 guard（40） | **5.91 ms** | | | | 5.27 ms |
+| token-budget guard（40） | **5.64 ms** | | | | 未测量 |
 
-| 内存与体积 | `yana-rt` | Python |
+| 内存与体积 | `yana-rt` 1.5.4 | Python |
 | --- | ---: | ---: |
-| 峰值 RSS，`scan core/skills` | **17.7 MiB** | 26.5 MiB |
-| 峰值 RSS，默认全仓库扫描 | **22.4 MiB** | 29.4 MiB |
-| Release 二进制 | 18.2 MiB | |
+| 峰值 RSS，`scan core/skills` | **16.3 MiB** | 25.4 MiB |
+| 峰值 RSS，默认全仓库扫描 | **20.7 MiB** | 32.1 MiB |
+| Release 二进制（默认构建） | 22.9 MiB | |
 
-与 8 月相比，`doctor` 和 `ci check` 的输出已与 Python 一致，而且都更快了。Release 二进制从约
-14 MiB 增大。
+加速比与 1.5.2 的测量一致。测量时机器较忙（平均负载 5.0 到 5.2），Rust 的绝对时间比 2026-11-15
+高 3% 到 47%；这两次测量还不能区分机器和代码各自的影响。自 10 月 MCP 服务器进入默认构建以来，
+二进制一直是 22.9 MiB。
 
 > [!WARNING]
-> 默认的全仓库 `scan` 目前还不是同等条件的对比。Rust 扫描 620 个文件，用时 0.36 秒，没有发现；
-> Python 扫描 1,643 个文件，用时 6.14 秒，报告 9 条 critical `SE002`。这是需要补齐的一致性差距，
-> 而不是快了 17 倍。token-budget guard 没有重新测量：在新的 worktree 中它的锁状态尚未初始化，
-> 会提前退出，此时测得的只是错误路径。
+> 默认的全仓库 `scan` 目前还不是同等条件的对比：双方的默认范围不同（Rust 0.29 秒，Python
+> 6.89 秒）。这是需要补齐的一致性差距，而不是快了 23 倍。token-budget guard 的时间是在已有
+> `flock-v1` 标记的项目中首次调用时测得的。
 
 以上为单台机器上的数据。Linux 和 Windows 尚未测量。
 

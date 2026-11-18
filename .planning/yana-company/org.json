@@ -1,0 +1,109 @@
+{
+ "id": "dhdcd", "title": "Đại hội đồng cổ đông", "code": "YA-GOV-AGM", "state": "quyet", "probe": "chu_tich",
+ "sub": "chủ sở hữu, quyền cao nhất",
+ "note": "Chủ sở hữu (anh). Bầu Hội đồng quản trị và Ban kiểm soát. Người thật, không tính vào định biên agent.",
+ "children": [
+  {
+   "id": "hdqt", "title": "Hội đồng quản trị", "code": "YA-GOV-BRD", "state": "quyet", "probe": "hoi_dong", "hc": [1, 5],
+   "sub": "Chủ tịch HĐQT chủ trì",
+   "note": "Đặt mục tiêu, ngân sách, bổ nhiệm Tổng giám đốc, duyệt việc rủi ro cao. Chủ tịch HĐQT chủ trì và giữ nút dừng khẩn cấp.",
+   "children": [
+    {
+     "id": "ktnb", "title": "Kiểm toán nội bộ", "code": "YA-AUD-IA", "state": "quyet", "probe": "kiem_toan", "hc": [0, 2], "line": 3,
+     "sub": "báo cáo HĐQT",
+     "note": "Tuyến 3. Báo cáo thẳng HĐQT, không qua Tổng giám đốc, không qua tài chính. Kiểm cả tuyến 1 và tuyến 2."
+    },
+    {
+     "id": "tgd", "title": "Tổng giám đốc", "code": "YA-EXE-CEO", "state": "quyet", "probe": "ceo", "hc": [1, 1],
+     "note": "Điều hành công việc hằng ngày. Chỉ đường này được giao việc xuống các phòng.",
+     "children": [
+      {
+       "id": "pho_kt", "title": "Phó TGĐ kỹ thuật", "code": "YA-ENG-VP", "state": "quyet", "probe": "giam_doc", "hc": [1, 1],
+       "children": [
+        {"id": "p_kt", "title": "P. Kỹ thuật", "code": "ENG", "kind": "dept", "state": "quyet", "line": 1, "stack": true, "children": [
+         {"id": "kt_tp", "title": "Trưởng phòng", "code": "YA-ENG-HOD", "state": "quyet", "probe": "dieu_hanh", "hc": [1, 2]},
+         {"id": "kt_arc", "title": "Kiến trúc sư", "code": "YA-ENG-ARC", "state": "de_xuat", "hc": [0, 2]},
+         {"id": "kt_dev", "title": "Lập trình viên", "code": "YA-ENG-DEV", "state": "quyet", "probe": "nhan_vien", "hc": [2, 12]},
+         {"id": "kt_dop", "title": "Vận hành hệ thống", "code": "YA-ENG-DOP", "state": "de_xuat", "hc": [0, 3]},
+         {"id": "kt_qa", "title": "Giám thị", "sub": "từ P. Sản phẩm", "code": "YA-PRD-QA", "kind": "inspector", "state": "quyet", "probe": "giam_thi", "hc": [1, 3]}
+        ]},
+        {"id": "p_sp", "title": "P. Sản phẩm", "code": "PRD", "kind": "dept", "state": "quyet", "line": 1, "stack": true, "children": [
+         {"id": "sp_tp", "title": "Trưởng phòng", "code": "YA-PRD-HOD", "state": "quyet", "probe": "dieu_hanh", "hc": [0, 1]},
+         {"id": "sp_dsn", "title": "Nhà thiết kế", "code": "YA-PRD-DSN", "state": "quyet", "probe": "nhan_vien", "hc": [0, 6]},
+         {"id": "sp_uxr", "title": "Nghiên cứu người dùng", "code": "YA-PRD-UXR", "state": "de_xuat", "hc": [0, 2]},
+         {"id": "sp_wrt", "title": "Viết tài liệu", "code": "YA-PRD-WRT", "state": "de_xuat", "hc": [0, 3]},
+         {"id": "sp_qa", "title": "Giám thị", "sub": "từ P. Kỹ thuật", "code": "YA-ENG-QA", "kind": "inspector", "state": "quyet", "probe": "giam_thi", "hc": [0, 2]}
+        ]},
+        {"id": "p_nc", "title": "P. Nghiên cứu", "code": "RSC", "kind": "dept", "state": "de_xuat", "line": 1, "stack": true, "children": [
+         {"id": "nc_tp", "title": "Trưởng phòng", "code": "YA-RSC-HOD", "state": "de_xuat", "probe": "dieu_hanh", "hc": [0, 1]},
+         {"id": "nc_rsc", "title": "Nghiên cứu viên", "code": "YA-RSC-RSC", "state": "de_xuat", "probe": "nhan_vien", "hc": [0, 4]},
+         {"id": "nc_dat", "title": "Dữ liệu", "code": "YA-RSC-DAT", "state": "de_xuat", "hc": [0, 2]},
+         {"id": "nc_qa", "title": "Giám thị", "sub": "từ P. Sản phẩm", "code": "YA-PRD-QA", "kind": "inspector", "state": "quyet", "probe": "giam_thi", "hc": [0, 1]}
+        ]}
+       ]
+      },
+      {
+       "id": "pho_kd", "title": "Phó TGĐ kinh doanh", "code": "YA-BIZ-VP", "state": "quyet", "probe": "giam_doc", "hc": [0, 1],
+       "children": [
+        {"id": "p_kd", "title": "P. Kinh doanh", "code": "SAL", "kind": "dept", "state": "quyet", "line": 1, "stack": true, "children": [
+         {"id": "kd_tp", "title": "Trưởng phòng", "code": "YA-SAL-HOD", "state": "quyet", "probe": "dieu_hanh", "hc": [0, 1]},
+         {"id": "kd_sal", "title": "Bán hàng", "code": "YA-SAL-SAL", "state": "de_xuat", "probe": "nhan_vien", "hc": [0, 4]},
+         {"id": "kd_qa", "title": "Giám thị", "sub": "từ P. Marketing", "code": "YA-MKT-QA", "kind": "inspector", "state": "quyet", "probe": "giam_thi", "hc": [0, 1]}
+        ]},
+        {"id": "p_mkt", "title": "P. Marketing", "code": "MKT", "kind": "dept", "state": "quyet", "line": 1, "stack": true, "children": [
+         {"id": "mkt_tp", "title": "Trưởng phòng", "code": "YA-MKT-HOD", "state": "quyet", "probe": "dieu_hanh", "hc": [0, 1]},
+         {"id": "mkt_mkt", "title": "Marketing", "code": "YA-MKT-MKT", "state": "de_xuat", "probe": "nhan_vien", "hc": [0, 4]},
+         {"id": "mkt_cnt", "title": "Nội dung", "code": "YA-MKT-CNT", "state": "de_xuat", "hc": [0, 3]},
+         {"id": "mkt_qa", "title": "Giám thị", "sub": "từ P. CSKH", "code": "YA-CSR-QA", "kind": "inspector", "state": "quyet", "probe": "giam_thi", "hc": [0, 1]}
+        ]},
+        {"id": "p_cskh", "title": "P. Chăm sóc khách hàng", "code": "CSR", "kind": "dept", "state": "quyet", "line": 1, "stack": true, "children": [
+         {"id": "cskh_tp", "title": "Trưởng phòng", "code": "YA-CSR-HOD", "state": "quyet", "probe": "dieu_hanh", "hc": [0, 1]},
+         {"id": "cskh_csr", "title": "Chăm sóc khách hàng", "code": "YA-CSR-CSR", "state": "de_xuat", "probe": "nhan_vien", "hc": [0, 6]},
+         {"id": "cskh_qa", "title": "Giám thị", "sub": "từ P. Kinh doanh", "code": "YA-SAL-QA", "kind": "inspector", "state": "quyet", "probe": "giam_thi", "hc": [0, 1]}
+        ]}
+       ]
+      },
+      {
+       "id": "ktt", "title": "Kế toán trưởng", "code": "YA-FIN-CAO", "state": "quyet", "probe": "cfo", "hc": [0, 1],
+       "note": "Phụ trách tài chính, kế toán. Bị kiểm toán nội bộ và Ban kiểm soát kiểm.",
+       "children": [
+        {"id": "p_tckt", "title": "P. Tài chính - Kế toán", "code": "FIN", "kind": "dept", "state": "quyet", "line": 1, "stack": true, "children": [
+         {"id": "tckt_acc", "title": "Kế toán", "code": "YA-FIN-ACC", "state": "quyet", "probe": "ke_toan", "hc": [0, 2]},
+         {"id": "tckt_tkc", "title": "Kiểm soát token", "code": "YA-FIN-TKC", "state": "quyet", "probe": "token", "hc": [1, 2],
+          "note": "Đặt trần token và tiền, đóng băng khi vượt. Trần do mã thực thi, không do phòng tự sửa."}
+        ]}
+       ]
+      },
+      {
+       "id": "khoi_ht", "title": "Khối hỗ trợ", "kind": "group", "sub": "dưới Tổng giám đốc",
+       "children": [
+        {"id": "p_hcns", "title": "P. Hành chính - Nhân sự", "code": "HRM", "kind": "dept", "state": "quyet", "line": 1, "stack": true, "children": [
+         {"id": "hcns_tp", "title": "Trưởng phòng", "code": "YA-HRM-HOD", "state": "quyet", "probe": "dieu_hanh", "hc": [0, 1]},
+         {"id": "hcns_hra", "title": "Nhân sự agent", "sub": "thẻ, khen phạt", "code": "YA-HRM-HRA", "state": "quyet", "probe": "nhan_su", "hc": [0, 2]},
+         {"id": "hcns_sct", "title": "Thư ký", "sub": "biên bản họp", "code": "YA-HRM-SCT", "state": "de_xuat", "probe": "thu_ky", "hc": [0, 2]}
+        ]},
+        {"id": "p_pc", "title": "P. Pháp chế", "code": "LEG", "kind": "dept", "state": "quyet", "line": 2, "stack": true, "children": [
+         {"id": "pc_leg", "title": "Pháp chế, tuân thủ", "code": "YA-LEG-LEG", "state": "quyet", "probe": "phap_che", "hc": [0, 1]},
+         {"id": "pc_rsk", "title": "Quản lý rủi ro", "code": "YA-LEG-RSK", "state": "de_xuat", "hc": [0, 1]}
+        ]},
+        {"id": "p_an", "title": "P. An ninh", "code": "SEC", "kind": "dept", "state": "quyet", "line": 2, "stack": true, "children": [
+         {"id": "an_grd", "title": "Bảo vệ cổng", "code": "YA-SEC-GRD", "state": "quyet", "probe": "bao_ve", "hc": [1, 3],
+          "note": "Mọi thứ từ web, file, thư đi qua đây trước khi vào công ty."},
+         {"id": "an_scy", "title": "Chuyên viên an ninh", "code": "YA-SEC-SCY", "state": "de_xuat", "hc": [0, 2]}
+        ]},
+        {"id": "p_ms", "title": "P. Mua sắm", "code": "PUR", "kind": "dept", "state": "de_xuat", "line": 1, "stack": true, "children": [
+         {"id": "ms_pur", "title": "Mua model, API", "sub": "và công cụ", "code": "YA-PUR-PUR", "state": "de_xuat", "hc": [0, 1]}
+        ]}
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "bks", "title": "Ban kiểm soát", "code": "YA-GOV-SUP", "state": "quyet", "probe": "giam_thi", "hc": [1, 3],
+   "sub": "báo cáo ĐHĐCĐ",
+   "note": "Do cổ đông bầu, độc lập với HĐQT và Tổng giám đốc. Giám sát cả hai, có quyền chặn, không có quyền giao việc."
+  }
+ ]
+}

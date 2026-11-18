@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sơ đồ công ty Yana</title>
+<style>
+/* Design read: internal org chart and status board for the project owner; neutral, dense, readable. Native CSS. */
+:root{
+  --bg:hsl(215 22% 97%);--fg:hsl(222 30% 14%);--muted:hsl(215 16% 38%);--card:hsl(210 25% 99%);--line:hsl(214 22% 78%);
+  --co:hsl(142 65% 26%);--part:hsl(32 90% 28%);--none:hsl(2 65% 40%);--accent:hsl(221 70% 42%);
+  --size-sm:0.875rem;--size-base:1rem;--size-xl:1.5rem;
+  --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:hsl(222 30% 9%);--fg:hsl(215 25% 92%);--muted:hsl(215 15% 68%);--card:hsl(222 26% 13%);--line:hsl(218 22% 28%);
+  --co:hsl(142 55% 60%);--part:hsl(38 85% 62%);--none:hsl(3 85% 70%);--accent:hsl(221 90% 75%);
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 var(--size-base)/1.5 var(--font)}
+header,.below{max-width:1180px;margin:0 auto;padding:0 16px}
+header{padding-top:20px}
+h1{font-size:var(--size-xl);font-weight:700;letter-spacing:-0.02em;line-height:1.25;margin:0 0 4px}
+h2{font-size:var(--size-base);font-weight:600;margin:24px 0 8px}
+h3{font-size:var(--size-base);font-weight:600;margin:0 0 2px}
+.muted{color:var(--muted)}.small{font-size:var(--size-sm)}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
+.pill{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;font-size:var(--size-sm)}
+button{font:inherit;color:var(--fg)}
+button.refresh,.chipcard{min-height:44px;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 14px;cursor:pointer}
+button.refresh:hover{border-color:var(--accent)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.note{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:var(--size-sm);max-width:75ch}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:var(--size-sm)}
+.lv-co{--lv:var(--co)}.lv-mot_phan{--lv:var(--part)}.lv-chua{--lv:var(--none)}
+.legend .lv-co,.legend .lv-mot_phan,.legend .lv-chua{color:var(--lv)}
+#chart{overflow:auto;padding:8px 0 8px 16px;margin-top:8px}
+svg{display:block;font-family:var(--font)}
+svg text{fill:var(--fg);font-size:var(--size-base);font-weight:600}
+svg .sub{font-size:var(--size-sm);font-weight:400;fill:var(--muted)}
+.node{cursor:pointer}
+.node rect{fill:var(--card);stroke:var(--lv,var(--line));stroke-width:2}
+.node.group rect{fill:var(--bg);stroke:var(--line);stroke-width:1.5}
+.node.inspector rect{stroke-dasharray:6 4}
+.node:hover rect{fill:var(--bg)}
+.node:focus-visible{outline:none}
+.node:focus-visible rect{stroke:var(--accent);stroke-width:4}
+.node.lv-co text:first-of-type,.node.lv-mot_phan text:first-of-type,.node.lv-chua text:first-of-type{fill:var(--fg)}
+.node.dept rect{fill:var(--bg);stroke:var(--fg);stroke-width:1.5}
+.edge{fill:none;stroke:var(--muted);stroke-width:1.5}
+.seat rect,.node:hover .seat rect{stroke-width:1.5;stroke-dasharray:none}
+.seat.filled rect,.node:hover .seat.filled rect{fill:var(--lv);stroke:var(--lv)}
+.seat.vacant rect,.node:hover .seat.vacant rect{fill:none;stroke:var(--line);stroke-dasharray:3 2}
+.seat text{font-size:var(--size-sm);font-weight:600}
+.seat.filled text{fill:var(--card)}
+.seat.vacant text{fill:var(--muted);font-weight:400}
+.shared{display:flex;flex-wrap:wrap;gap:10px}
+.chipcard{border-color:var(--lv)}
+.chipcard:hover{background:var(--bg)}
+#detail{position:fixed;inset:auto 16px 16px auto;margin:0;width:min(380px,calc(100vw - 32px));max-height:70vh;overflow:auto;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:14px}
+.checks{list-style:none;padding:0;margin:10px 0 0}
+.checks li{padding:8px 0;border-top:1px solid var(--line)}
+.mark{display:inline-block;width:1.6em;font-weight:700}
+.ok .mark{color:var(--co)}.no .mark{color:var(--none)}
+.detail-line{margin-left:1.6em;font-size:var(--size-sm);color:var(--muted);word-break:break-word}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sơ đồ công ty Yana: đang ở đâu</h1>
+  <div class="muted">Theo mô hình công ty cổ phần có Ban kiểm soát (Luật Doanh nghiệp 2020) và mô hình ba tuyến. Cấu trúc lấy từ org.json; trạng thái được dò từ mã nguồn thật của Yana-AI. Bấm một ô để xem chi tiết.</div>
+  <div class="note">"Có nền" nghĩa là file hoặc mã tồn tại. Chưa có ô nào được chạy thử từ đầu đến cuối trong một đội nhiều agent. Người thật có thể vào bất kỳ ô nào.</div>
+  <div class="bar" id="bar"></div>
+  <div class="legend">
+    <span class="lv-co">✔ Có nền</span><span class="lv-mot_phan">◐ Một phần</span><span class="lv-chua">✕ Chưa có</span>
+    <span>Viền nét đứt: giám thị đến từ phòng khác</span><span>Số góc phải: agent chạy thử / tối đa</span><span>Ô vuông đặc: ghế có agent · ô nét đứt: ghế trống (rê chuột xem mã ghế)</span><span>⚠ Có file nhưng không nơi nào gọi</span>
+  </div>
+</header>
+<div id="chart" aria-live="polite">Đang tải...</div>
+<div class="below">
+  <h2>Nền kỹ thuật dùng chung (không phải chức vụ)</h2>
+  <div class="shared" id="shared"></div>
+</div>
+<aside id="detail" popover="auto"></aside>
+<script src="/chart.js"></script>
+</body>
+</html>

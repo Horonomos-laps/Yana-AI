@@ -103,15 +103,24 @@ mod tests {
     }
 
     #[test]
+<<<<<<< HEAD
     fn all_descriptors_present() {
         assert_eq!(Manifest::all().descriptors.len(), 18);
+=======
+    fn all_twelve_descriptors_present() {
+        assert_eq!(Manifest::all().descriptors.len(), 13);
+>>>>>>> fix/yana-rt-pypi-shim-forkbomb
     }
 
     #[test]
     fn descriptors_accessor_returns_every_descriptor_unfiltered() {
         // Unlike available(ctx), which filters — the Permission Inspector
         // needs the full list including currently-unavailable capabilities.
+<<<<<<< HEAD
         assert_eq!(Manifest::all().descriptors().len(), 18);
+=======
+        assert_eq!(Manifest::all().descriptors().len(), 13);
+>>>>>>> fix/yana-rt-pypi-shim-forkbomb
     }
 
     #[test]
@@ -221,9 +230,15 @@ mod tests {
         let manifest = Manifest::all();
         let available = manifest.available(&ctx());
         // On unix test runners, process.* stay available; on non-unix they
+<<<<<<< HEAD
         // wouldn't be. Either way, count must be <= 18 and repo.read must
         // always be present.
         assert!(available.len() <= 18);
+=======
+        // wouldn't be. Either way, count must be <= 13 and repo.read must
+        // always be present.
+        assert!(available.len() <= 13);
+>>>>>>> fix/yana-rt-pypi-shim-forkbomb
         assert!(available.iter().any(|d| d.name == "repo.read"));
     }
 }

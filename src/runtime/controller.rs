@@ -41,6 +41,16 @@ pub(crate) trait ToolExecutor: Send + Sync {
             denied: true,
         }
     }
+
+    /// True for a call that changes the machine and so is implemented only in
+    /// `execute_approved`. When the authority chain has already said `Allow`
+    /// for such a call (a lease, a remembered answer, the away mode), it must
+    /// go to that path: the plain `execute` has nothing for it, and the call
+    /// would be refused after being allowed. Default `false`: a call nobody
+    /// listed here keeps going to `execute`, as before.
+    fn runs_only_when_approved(&self, _call: &ToolCall) -> bool {
+        false
+    }
 }
 
 /// Opaque proof that the canonical authority chain approved one mutating
@@ -275,7 +285,17 @@ impl TurnEngine {
                                 call_id: call.id.clone(),
                             });
                             let started_at = Utc::now();
-                            let result = self.executor.execute(&request.context, &call);
+                            // `Allow` is the authority chain's own decision for this
+                            // exact call, made just above; it is the proof
+                            // `ApprovedTool` stands for, so no second decision is made.
+                            let result = if self.executor.runs_only_when_approved(&call) {
+                                self.executor.execute_approved(ApprovedTool {
+                                    context: &request.context,
+                                    call: &call,
+                                })
+                            } else {
+                                self.executor.execute(&request.context, &call)
+                            };
                             let completed_at = Utc::now();
                             super::receipt::record_execution(
                                 &request.context,

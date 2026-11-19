@@ -9,6 +9,11 @@ mod check;
 mod controller;
 mod events;
 mod human_grant;
+// The control levels are wired into the authority chain in the next step.
+#[allow(dead_code)]
+mod level;
+#[allow(dead_code)]
+mod level_rules;
 mod origin;
 mod outcome;
 mod pending_approval;

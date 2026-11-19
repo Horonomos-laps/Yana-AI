@@ -96,6 +96,15 @@ fn resolve_for_write(root: &Path, requested: &str) -> Result<PathBuf, Capability
     Ok(target)
 }
 
+/// The absolute, canonical path a write to `requested` would reach, or `None`
+/// when the write could not be made (it escapes the repository, its parent is
+/// missing, it is a symlink, or it is a protected configuration file). The
+/// control levels use it to classify a path by where it really is, not by how
+/// it was spelled.
+pub(crate) fn canonical_write_target(root: &Path, requested: &str) -> Option<PathBuf> {
+    resolve_for_write(root, requested).ok()
+}
+
 /// Files under `.yana-ai/` that decide where data is sent, which programs run,
 /// or who is allowed to do what (leases, pending approvals). They live inside
 /// the repository, so a model (or a cloned repo) must not be able to rewrite

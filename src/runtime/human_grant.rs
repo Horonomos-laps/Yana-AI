@@ -136,7 +136,12 @@ pub(crate) fn grant_for_decision(
         ApprovalScope::Session => session_subject(session_id),
         _ => WORKSPACE_SUBJECT.to_string(),
     };
-    let store = LeaseStore::for_root(root);
+    let store = match LeaseStore::for_human_grants(root) {
+        Ok(store) => store,
+        Err(error) => {
+            return GrantOutcome::Declined(format!("could not open the store for remembered answers: {error:#}"));
+        }
+    };
     if let Some(existing) = store.find_live_exact(&subject, GRANTABLE_CAPABILITY, &command) {
         return GrantOutcome::Granted(existing);
     }
@@ -165,7 +170,13 @@ pub(super) fn matching_human_grant(
     if capability != GRANTABLE_CAPABILITY {
         return None;
     }
-    let store = LeaseStore::for_root(root);
+    let store = match LeaseStore::for_human_grants(root) {
+        Ok(store) => store,
+        Err(error) => {
+            eprintln!("[authority] could not open the store for remembered answers: {error:#}");
+            return None;
+        }
+    };
     [session_subject(session_id), WORKSPACE_SUBJECT.to_string()]
         .iter()
         .find_map(|subject| {
@@ -195,6 +206,10 @@ mod tests {
         fs::create_dir_all(marker.parent().unwrap()).unwrap();
         fs::write(&marker, yana_rt::flock_v1::PROTOCOL_VERSION).unwrap();
         dir
+    }
+
+    fn human_store(root: &Path) -> LeaseStore {
+        LeaseStore::for_human_grants(root).unwrap()
     }
 
     fn run_command(command: &str) -> ToolCall {
@@ -239,7 +254,7 @@ mod tests {
         let root = temp_root();
         assert!(matches!(grant(&root, "s1", "cargo test", true, ApprovalScope::Once), GrantOutcome::NotRequested));
         assert!(!covered(&root, "s1", "cargo test"));
-        assert!(LeaseStore::for_root(&root).list().unwrap().is_empty());
+        assert!(human_store(&root).list().unwrap().is_empty());
         fs::remove_dir_all(&root).ok();
     }
 
@@ -249,7 +264,7 @@ mod tests {
         for scope in [ApprovalScope::Session, ApprovalScope::Always] {
             assert!(matches!(grant(&root, "s1", "rm -rf build", false, scope), GrantOutcome::Declined(_)));
         }
-        assert!(LeaseStore::for_root(&root).list().unwrap().is_empty());
+        assert!(human_store(&root).list().unwrap().is_empty());
         fs::remove_dir_all(&root).ok();
     }
 
@@ -278,7 +293,7 @@ mod tests {
             let outcome = grant_for_decision(&root, "s1", &call, true, "human:anh", ApprovalScope::Always);
             assert!(matches!(outcome, GrantOutcome::Declined(_)), "{call:?}");
         }
-        assert!(LeaseStore::for_root(&root).list().unwrap().is_empty());
+        assert!(human_store(&root).list().unwrap().is_empty());
         fs::remove_dir_all(&root).ok();
     }
 
@@ -308,7 +323,7 @@ mod tests {
             let outcome = grant(&root, session, command, true, ApprovalScope::Session);
             assert!(matches!(outcome, GrantOutcome::Declined(_)), "{command:?} in {session:?}");
         }
-        assert!(LeaseStore::for_root(&root).list().unwrap().is_empty());
+        assert!(human_store(&root).list().unwrap().is_empty());
         fs::remove_dir_all(&root).ok();
     }
 
@@ -347,7 +362,7 @@ mod tests {
             panic!("second grant refused");
         };
         assert_eq!(first.id, second.id);
-        assert_eq!(LeaseStore::for_root(&root).list().unwrap().len(), 1);
+        assert_eq!(human_store(&root).list().unwrap().len(), 1);
         fs::remove_dir_all(&root).ok();
     }
 
@@ -366,7 +381,7 @@ mod tests {
             let outcome = grant(&root, "s1", command, true, ApprovalScope::Always);
             assert!(matches!(outcome, GrantOutcome::Declined(_)), "{command:?} must not be remembered");
         }
-        assert!(LeaseStore::for_root(&root).list().unwrap().is_empty());
+        assert!(human_store(&root).list().unwrap().is_empty());
         assert!(matches!(grant(&root, "s1", "cargo test", true, ApprovalScope::Always), GrantOutcome::Granted(_)));
         fs::remove_dir_all(&root).ok();
     }

@@ -27,6 +27,7 @@
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -81,8 +82,13 @@ fn leases_path(root: &Path) -> PathBuf {
 /// (that would either strand an operator's real leases or, worse, make an
 /// authority check believe leases are exhausted when the file just failed
 /// to parse).
+#[cfg(test)]
 fn read_leases(root: &Path) -> Result<Vec<Lease>> {
-    let path = leases_path(root);
+    read_leases_at(&leases_path(root))
+}
+
+fn read_leases_at(path: &Path) -> Result<Vec<Lease>> {
+    let path = path.to_path_buf();
     let metadata = match fs::symlink_metadata(&path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -100,8 +106,13 @@ fn read_leases(root: &Path) -> Result<Vec<Lease>> {
     Ok(leases)
 }
 
+#[cfg(test)]
 fn write_leases(root: &Path, leases: &[Lease]) -> Result<()> {
-    let path = leases_path(root);
+    write_leases_at(&leases_path(root), leases)
+}
+
+fn write_leases_at(path: &Path, leases: &[Lease]) -> Result<()> {
+    let path = path.to_path_buf();
     let parent = path.parent().expect("lease store path has parent");
     fs::create_dir_all(parent)
         .with_context(|| format!("cannot create lease store directory {}", parent.display()))?;
@@ -193,11 +204,62 @@ fn allow_entry_matches(entry: &str, command_text: &str) -> bool {
 
 pub struct LeaseStore {
     root: PathBuf,
+    /// The JSON file this store reads and writes. `.yana-ai/leases.json` in
+    /// the repository for `for_root`; a file outside it for `for_human_grants`.
+    file: PathBuf,
+}
+
+/// Where a person's remembered answers are kept: next to `config_trust`'s
+/// records, `<trust store>/human-grants`. Tests get a private directory per
+/// test thread and never touch a real home.
+fn human_grants_dir() -> Result<PathBuf> {
+    #[cfg(test)]
+    {
+        Ok(super::config_trust::empty_store_in_test().join("human-grants"))
+    }
+    #[cfg(not(test))]
+    {
+        super::config_trust::store_dir()
+            .map(|dir| dir.join("human-grants"))
+            .map_err(|error| anyhow::anyhow!("{error}"))
+    }
 }
 
 impl LeaseStore {
     pub fn for_root(root: &Path) -> Self {
-        Self { root: root.to_path_buf() }
+        Self { root: root.to_path_buf(), file: leases_path(root) }
+    }
+
+    /// The store for answers a person gave ("for this session", "always").
+    ///
+    /// It lives OUTSIDE the repository on purpose. `leases.json` sits in the
+    /// project, where any command a person approves can rewrite it, and a
+    /// forged `human-grant:` lease there would cover every later turn of the
+    /// person. Refuses to hand out a store that resolves inside the repository
+    /// (same rule as `config_trust`).
+    pub(crate) fn for_human_grants(root: &Path) -> Result<Self> {
+        let dir = human_grants_dir()?;
+        let repo = root
+            .canonicalize()
+            .with_context(|| format!("cannot resolve repository {}", root.display()))?;
+        let mut existing = dir.as_path();
+        while !existing.exists() {
+            existing = existing
+                .parent()
+                .context("the store for a person's grants has no existing parent directory")?;
+        }
+        let resolved = existing
+            .canonicalize()
+            .with_context(|| format!("cannot resolve {}", existing.display()))?;
+        if resolved.starts_with(&repo) {
+            bail!("the store for a person's grants must be outside the repository");
+        }
+        let name: String = Sha256::digest(repo.to_string_lossy().as_bytes())
+            .iter()
+            .take(16)
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        Ok(Self { root: root.to_path_buf(), file: dir.join(format!("{name}.json")) })
     }
 
     /// Runs `action` as one `flock-v1` critical section scoped to this
@@ -279,7 +341,7 @@ impl LeaseStore {
             bail!("'{}' cannot be leased: every call needs a person's approval", capability.trim());
         }
         self.with_locked(|| {
-            let mut leases = read_leases(&self.root)?;
+            let mut leases = read_leases_at(&self.file)?;
             // Grant-time check (item #6): the parent must actually exist.
             // This is a fail-fast UX check, not the safety boundary itself
             // — the real `child ⊆ parent` invariant is enforced at every
@@ -311,7 +373,7 @@ impl LeaseStore {
                 parent_lease_id,
             };
             leases.push(lease.clone());
-            write_leases(&self.root, &leases)?;
+            write_leases_at(&self.file,&leases)?;
             Ok(lease)
         })
     }
@@ -379,12 +441,12 @@ impl LeaseStore {
     pub fn revoke(&self, id: &str) -> Result<()> {
         let id = id.to_string();
         self.with_locked(|| {
-            let mut leases = read_leases(&self.root)?;
+            let mut leases = read_leases_at(&self.file)?;
             let Some(lease) = leases.iter_mut().find(|lease| lease.id == id) else {
                 bail!("no lease with id '{id}'");
             };
             lease.revoked = true;
-            write_leases(&self.root, &leases)
+            write_leases_at(&self.file,&leases)
         })
     }
 
@@ -393,7 +455,7 @@ impl LeaseStore {
         // file via a same-directory temp-file + rename, so a concurrent
         // reader only ever observes a complete old or complete new file,
         // never a torn write.
-        read_leases(&self.root)
+        read_leases_at(&self.file)
     }
 
     /// The one method `RuntimeAuthority::capability_decision` calls.
@@ -437,7 +499,7 @@ impl LeaseStore {
             return Ok(None);
         }
         self.with_locked(|| {
-            let mut leases = read_leases(&self.root)?;
+            let mut leases = read_leases_at(&self.file)?;
             let now = Utc::now();
             let Some(leaf_index) = leases.iter().position(|lease| {
                 !lease.revoked
@@ -460,7 +522,7 @@ impl LeaseStore {
                 }
             }
             let id = leases[leaf_index].id.clone();
-            write_leases(&self.root, &leases)?;
+            write_leases_at(&self.file,&leases)?;
             Ok(Some(id))
         })
     }
@@ -478,7 +540,7 @@ impl LeaseStore {
         repo_root: &Path,
         command_text: Option<&str>,
     ) -> Option<String> {
-        let leases = read_leases(&self.root).ok()?;
+        let leases = read_leases_at(&self.file).ok()?;
         let now = Utc::now();
         let mine: Vec<&Lease> = leases
             .iter()
@@ -627,7 +689,13 @@ pub fn cmd_lease_grant(
 
 pub fn cmd_lease_list(json: bool) -> Result<()> {
     let root = std::env::current_dir().context("cannot resolve project root")?;
-    let leases = LeaseStore::for_root(&root).list()?;
+    let mut leases = LeaseStore::for_root(&root).list()?;
+    // A person's remembered answers live in a store outside the repository.
+    // If it cannot be opened, say so instead of showing a list that looks complete.
+    match LeaseStore::for_human_grants(&root).and_then(|store| store.list()) {
+        Ok(remembered) => leases.extend(remembered),
+        Err(error) => eprintln!("[lease] could not read the answers a person remembered: {error:#}"),
+    }
     if json {
         println!("{}", serde_json::to_string_pretty(&leases)?);
         return Ok(());
@@ -657,7 +725,14 @@ pub fn cmd_lease_list(json: bool) -> Result<()> {
 
 pub fn cmd_lease_revoke(id: String, json: bool) -> Result<()> {
     let root = std::env::current_dir().context("cannot resolve project root")?;
-    LeaseStore::for_root(&root).revoke(&id)?;
+    // The id may belong to the project's store or to the store of a person's
+    // remembered answers; try the project's first, then the other.
+    if let Err(project_error) = LeaseStore::for_root(&root).revoke(&id) {
+        let remembered = LeaseStore::for_human_grants(&root).and_then(|store| store.revoke(&id));
+        if remembered.is_err() {
+            return Err(project_error);
+        }
+    }
     if json {
         println!("{}", serde_json::json!({ "revoked": id }));
     } else {
@@ -1561,5 +1636,27 @@ mod tests {
         store.revoke(&live.id).unwrap();
         assert!(store.find_live_exact("human-grant:s1", "command.execute", "cargo test").is_none());
         fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_store_for_remembered_answers_is_outside_the_repository() {
+        let root = temp_root();
+        let store = LeaseStore::for_human_grants(&root).unwrap();
+        assert!(!store.file.starts_with(&root), "{} must not be inside {}", store.file.display(), root.display());
+        assert_ne!(store.file, leases_path(&root));
+        // The project's own store and the person's store do not see each other's leases.
+        LeaseStore::for_root(&root)
+            .grant("agent:a".into(), "command.execute".into(), vec!["cargo test".into()], vec![], "h".into(), 60, None, None)
+            .unwrap();
+        assert!(store.list().unwrap().is_empty());
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_store_for_remembered_answers_refuses_a_location_inside_the_repository() {
+        // A repository that contains the store directory: use the store's own
+        // parent as the "repository".
+        let store_parent = super::super::config_trust::empty_store_in_test();
+        assert!(LeaseStore::for_human_grants(&store_parent).is_err());
     }
 }

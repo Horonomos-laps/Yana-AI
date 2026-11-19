@@ -17,6 +17,21 @@ fn wait_until_free(store: &SqliteSessionStore, id: &str) {
     panic!("session {id} stayed locked");
 }
 
+/// `recover` can still read a free lock as held for a moment, for the same
+/// reason `wait_until_free` exists: a child spawned by another test thread
+/// inherits the open file. While that lasts it reports nothing and changes
+/// nothing, so ask again until it reports a crashed session.
+fn recover_until_crashed(store: &SqliteSessionStore) -> Vec<String> {
+    for _ in 0..200 {
+        let crashed = store.recover().unwrap().crashed_sessions;
+        if !crashed.is_empty() {
+            return crashed;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    Vec::new()
+}
+
 fn open_root(fx: &super::tests::Fixture) -> StateRoot {
     StateRoot::for_profile(&fx.base, &ProfileName::default_profile())
 }
@@ -68,7 +83,7 @@ fn recover_marks_a_dead_open_session_crashed_and_leaves_live_and_finished_ones()
     assert_eq!(reason("done"), Some(EndReason::Completed));
     drop(live_lock);
     wait_until_free(&store, "live");
-    assert_eq!(store.recover().unwrap().crashed_sessions, vec!["live"], "once released it is dead too");
+    assert_eq!(recover_until_crashed(&store), vec!["live"], "once released it is dead too");
     assert!(store.recover().unwrap().crashed_sessions.is_empty(), "recover is repeatable");
 }
 

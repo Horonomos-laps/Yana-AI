@@ -1051,6 +1051,82 @@ fn no_intent_declared_leaves_existing_approval_behavior_unchanged() {
     ), "with no declaration at all, the four pre-existing terms alone must still govern, unchanged");
 }
 
+/// An executor that, like the real one, runs a command only through the
+/// approved path and has nothing for it on the plain path.
+struct ApprovedPathOnlyExecutor {
+    approved_runs: Arc<AtomicUsize>,
+    plain_runs: Arc<AtomicUsize>,
+}
+
+impl ToolExecutor for ApprovedPathOnlyExecutor {
+    fn execute(&self, _context: &TurnContext, call: &ToolCall) -> ToolResultRecord {
+        self.plain_runs.fetch_add(1, Ordering::SeqCst);
+        ToolResultRecord {
+            call_id: call.id.clone(),
+            output: "no implementation".into(),
+            is_error: true,
+            denied: true,
+        }
+    }
+    fn execute_approved(&self, approved: crate::runtime::ApprovedTool<'_>) -> ToolResultRecord {
+        self.approved_runs.fetch_add(1, Ordering::SeqCst);
+        ToolResultRecord {
+            call_id: approved.call().id.clone(),
+            output: "ran".into(),
+            is_error: false,
+            denied: false,
+        }
+    }
+    fn runs_only_when_approved(&self, call: &ToolCall) -> bool {
+        call.name == "run_command"
+    }
+}
+
+fn run_one_command_turn(root: &std::path::Path, command: &str) -> (TurnOutcome, usize, usize) {
+    let approved_runs = Arc::new(AtomicUsize::new(0));
+    let plain_runs = Arc::new(AtomicUsize::new(0));
+    let provider = Arc::new(MockProvider::new(
+        [
+            MockResponse::Tool(call_with_command("run_command", command)),
+            MockResponse::Text(vec!["finished"]),
+        ],
+        Arc::new(AtomicUsize::new(0)),
+    ));
+    let executor = Arc::new(ApprovedPathOnlyExecutor {
+        approved_runs: Arc::clone(&approved_runs),
+        plain_runs: Arc::clone(&plain_runs),
+    });
+    let engine = TurnEngine::new(
+        provider as Arc<dyn crate::model::provider::ChatProvider>,
+        Arc::new(YanaAuthorityChain),
+        executor as Arc<dyn ToolExecutor>,
+    );
+    let outcome = engine.run(request(root), &CancellationToken::default(), &mut |_| {}).unwrap();
+    (outcome, approved_runs.load(Ordering::SeqCst), plain_runs.load(Ordering::SeqCst))
+}
+
+#[test]
+fn a_command_the_person_already_allowed_really_runs() {
+    let root = project_with_lock_protocol();
+    remember(root.path(), "session-1", "cargo test", ApprovalScope::Session);
+
+    let (outcome, approved_runs, plain_runs) = run_one_command_turn(root.path(), "cargo test");
+
+    assert!(matches!(outcome, TurnOutcome::Completed { .. }), "{outcome:?}");
+    assert_eq!(approved_runs, 1, "an allowed command must reach the executor's approved path");
+    assert_eq!(plain_runs, 0, "and must not be sent to the path that has no implementation for it");
+}
+
+#[test]
+fn a_command_nobody_allowed_still_waits_and_does_not_run() {
+    let root = project_with_lock_protocol();
+
+    let (outcome, approved_runs, plain_runs) = run_one_command_turn(root.path(), "cargo test");
+
+    assert!(matches!(outcome, TurnOutcome::AwaitingApproval { .. }), "{outcome:?}");
+    assert_eq!((approved_runs, plain_runs), (0, 0), "nothing runs until the person answers");
+}
+
 fn project_with_lock_protocol() -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
     let marker = root.path().join(yana_rt::flock_v1::PROTOCOL_FILE);

@@ -140,7 +140,16 @@ impl ChatCapabilityExecutor {
     }
 }
 
+/// The calls that change files or run a command. Anything else that is only
+/// implemented in `execute_approved` (MCP, LSP, web search) is left out on
+/// purpose: it reaches outside the machine, so an `Allow` alone does not run it.
+const CHANGES_THE_MACHINE: &[&str] = &["run_command", "write_file", "patch_file", "write_config"];
+
 impl ToolExecutor for ChatCapabilityExecutor {
+    fn runs_only_when_approved(&self, call: &ToolCall) -> bool {
+        CHANGES_THE_MACHINE.contains(&call.name.as_str())
+    }
+
     fn execute(&self, context: &TurnContext, call: &ToolCall) -> ToolResultRecord {
         match call.name.as_str() {
             "read_file" => match parse_string_arg(&call.arguments_json, "path") {

@@ -147,6 +147,40 @@ pub(crate) fn command_matches(entry: &str, command_text: &str) -> bool {
     command_tokens[..entry_tokens.len()] == entry_tokens[..]
 }
 
+/// Marks an `allow` entry as an exact-command grant. Kept inside the entry
+/// text instead of a new `Lease` field on purpose: a build that predates this
+/// marker reads `exact:git status` as a prefix entry whose first token is
+/// `exact:git`, which matches no real command, so a rollback loses the grant
+/// and never widens it. A new boolean field would be ignored by serde in the
+/// older build and silently turn the grant into a prefix match.
+const EXACT_PREFIX: &str = "exact:";
+
+/// Longest command a human grant may record. A grant that long is almost
+/// certainly pasted text, not something to approve once and remember.
+pub(crate) const MAX_EXACT_COMMAND_CHARS: usize = 4096;
+
+/// Token-for-token equality. Uses the same tokenizer as `command_matches`
+/// and real command execution; `git status && rm -rf x` tokenizes to more
+/// tokens than `git status`, so it can never be equal. Fails closed on
+/// anything that does not tokenize.
+fn command_matches_exactly(entry: &str, command_text: &str) -> bool {
+    let (Ok(entry_tokens), Ok(command_tokens)) = (
+        super::command::tokenize_command(entry),
+        super::command::tokenize_command(command_text),
+    ) else {
+        return false;
+    };
+    !entry_tokens.is_empty() && entry_tokens == command_tokens
+}
+
+/// One `allow` entry against one command: exact when marked, prefix otherwise.
+fn allow_entry_matches(entry: &str, command_text: &str) -> bool {
+    match entry.strip_prefix(EXACT_PREFIX) {
+        Some(command) => command_matches_exactly(command, command_text),
+        None => command_matches(entry, command_text),
+    }
+}
+
 pub struct LeaseStore {
     root: PathBuf,
 }
@@ -240,6 +274,45 @@ impl LeaseStore {
             write_leases(&self.root, &leases)?;
             Ok(lease)
         })
+    }
+
+    /// Grants `subject` exactly one command, token for token: the shape a
+    /// human's "allow for this session / always" answer needs. Refuses
+    /// anything that is empty, longer than `MAX_EXACT_COMMAND_CHARS`, holds a
+    /// control character (NUL, CR, LF), or does not tokenize, so a refused
+    /// grant leaves nothing behind. Everything else (never-leasable
+    /// capabilities, the subject rules, locking) is `grant`'s own checks.
+    pub fn grant_exact(
+        &self,
+        subject: String,
+        capability: String,
+        command: &str,
+        issued_by: String,
+        expires_in_minutes: u64,
+    ) -> Result<Lease> {
+        let command = command.trim();
+        if command.is_empty() {
+            bail!("an exact grant needs a command");
+        }
+        if command.chars().count() > MAX_EXACT_COMMAND_CHARS {
+            bail!("an exact grant is limited to {MAX_EXACT_COMMAND_CHARS} characters");
+        }
+        if command.chars().any(char::is_control) {
+            bail!("an exact grant cannot hold control characters");
+        }
+        if !super::command::tokenize_command(command).is_ok_and(|tokens| !tokens.is_empty()) {
+            bail!("an exact grant command could not be parsed");
+        }
+        self.grant(
+            subject,
+            capability,
+            vec![format!("{EXACT_PREFIX}{command}")],
+            Vec::new(),
+            issued_by,
+            expires_in_minutes,
+            None,
+            None,
+        )
     }
 
     pub fn revoke(&self, id: &str) -> Result<()> {
@@ -393,7 +466,7 @@ fn lease_scope_allows(lease: &Lease, command_text: Option<&str>) -> bool {
     match command_text {
         Some(text) => {
             !lease.deny.iter().any(|entry| command_matches(entry, text))
-                && lease.allow.iter().any(|entry| command_matches(entry, text))
+                && lease.allow.iter().any(|entry| allow_entry_matches(entry, text))
         }
         None => true,
     }
@@ -1276,5 +1349,91 @@ mod tests {
             "the bounded chain-depth walk must terminate quickly, not hang on a cycle"
         );
         fs::remove_dir_all(&root).ok();
+    }
+
+    fn consume(store: &LeaseStore, root: &Path, subject: &str, command: &str) -> bool {
+        store
+            .try_consume_matching(subject, "command.execute", root, Some(command))
+            .unwrap()
+            .is_some()
+    }
+
+    #[test]
+    fn exact_grant_matches_only_the_identical_command() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        store
+            .grant_exact(
+                "human-grant:s1".into(),
+                "command.execute".into(),
+                "git push origin main",
+                "human:anh".into(),
+                60,
+            )
+            .unwrap();
+
+        assert!(consume(&store, &root, "human-grant:s1", "git push origin main"));
+        assert!(
+            !consume(&store, &root, "human-grant:s1", "git push origin main --force"),
+            "an exact grant must not widen to the same command plus extra flags"
+        );
+        assert!(!consume(&store, &root, "human-grant:s1", "git push origin"));
+        assert!(!consume(&store, &root, "human-grant:other", "git push origin main"));
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn exact_grant_is_not_widened_by_shell_operators() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        store
+            .grant_exact("human-grant:s1".into(), "command.execute".into(), "git status", "human:anh".into(), 60)
+            .unwrap();
+
+        for chained in ["git status && rm -rf x", "git status; rm -rf x", "git status | sh", "git status $(id)"] {
+            assert!(!consume(&store, &root, "human-grant:s1", chained), "{chained:?} must not match");
+        }
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn exact_grant_rejects_empty_oversized_and_control_character_commands() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        let oversized = "a".repeat(MAX_EXACT_COMMAND_CHARS + 1);
+        let max_length = "a".repeat(MAX_EXACT_COMMAND_CHARS);
+        for bad in ["", "   ", "git\0status", "git status\r\nrm -rf x", "git status\nrm x", oversized.as_str()] {
+            let result = store.grant_exact(
+                "human-grant:s1".into(),
+                "command.execute".into(),
+                bad,
+                "human:anh".into(),
+                60,
+            );
+            assert!(result.is_err(), "{:?} must be refused", bad.chars().take(20).collect::<String>());
+        }
+        assert!(store
+            .grant_exact("human-grant:s1".into(), "command.execute".into(), &max_length, "human:anh".into(), 60)
+            .is_ok());
+        assert_eq!(store.list().unwrap().len(), 1, "refused grants must leave nothing behind");
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn exact_grant_cannot_lease_a_never_leased_capability() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        let result = store.grant_exact("human-grant:s1".into(), "lsp.query".into(), "x", "human:anh".into(), 60);
+        assert!(result.is_err());
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn exact_entry_fails_closed_under_the_prefix_matcher_an_older_build_would_use() {
+        // A build that predates the `exact:` marker reads the entry as an
+        // ordinary prefix entry. Its first token is "exact:git", which no
+        // real command has, so a rollback can only lose the grant, never widen it.
+        assert!(!command_matches("exact:git status", "git status"));
+        assert!(!command_matches("exact:git status", "git status --porcelain"));
     }
 }

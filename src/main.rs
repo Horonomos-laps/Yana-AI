@@ -29,6 +29,7 @@ mod project_workspace;
 mod provenance;
 mod research;
 mod route;
+mod schedule;
 pub mod scanner;
 mod score;
 mod session_context;

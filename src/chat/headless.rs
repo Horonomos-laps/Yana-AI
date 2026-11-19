@@ -282,28 +282,17 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
     // this one call is already recorded above and stands either way.
     // Granted under the paused session's own root, the same value
     // `capability_decision` matches leases against, not the process's cwd.
-    match grant_for_decision(&GrantRequest {
+    let grant = grant_for_decision(&GrantRequest {
         root: &resolved.context.session.repo_root,
         session_id: &resolved.context.session.session_id,
         call: &resolved.pending_call,
         approved: input.decision,
         decided_by: &input.decided_by,
         scope: input.scope,
-    }) {
-        GrantOutcome::NotRequested => {}
-        GrantOutcome::Granted(lease) => {
-            eprintln!(
-                "[chat/headless] remembered this answer as lease {} until {} (revoke: yana-rt lease revoke {})",
-                lease.id, lease.expires_at, lease.id
-            );
-            if let Some(warning) = project_code_warning(&resolved.pending_call) {
-                eprintln!("[chat/headless] note: {warning}");
-            }
-        }
-        GrantOutcome::Declined(reason) => {
-            eprintln!("[chat/headless] approved this call only; not remembered: {reason}")
-        }
-    }
+    });
+    let warning = project_code_warning(&resolved.pending_call);
+    announce_grant(&grant, warning);
+    let grant_event = grant_event(&grant, warning);
 
     let session = SessionContext::new(
         resolved.context.session.session_id.clone(),
@@ -323,6 +312,9 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
     );
     let cancellation = CancellationToken::default();
     let mut output = io::BufWriter::new(io::stdout().lock());
+    if let Some(event) = &grant_event {
+        write_json_line(&mut output, event)?;
+    }
     let mut approval_reason: Option<String> = None;
     let mut event_context = EventContext::new(&resolved.context.session.repo_root)
         .with_known_call(&resolved.pending_call.id, &resolved.pending_call.name);
@@ -756,6 +748,47 @@ fn write_event_with(output: &mut impl Write, event: RuntimeEvent, context: &mut 
     Ok(())
 }
 
+/// What was done with a request to remember an answer, for a person at a
+/// terminal. Remembering never blocks the turn, so this is only information.
+fn announce_grant(grant: &GrantOutcome, warning: Option<&str>) {
+    match grant {
+        GrantOutcome::NotRequested => {}
+        GrantOutcome::Granted(lease) => {
+            eprintln!(
+                "[chat/headless] remembered this answer as lease {} until {} (revoke: yana-rt lease revoke {})",
+                lease.id, lease.expires_at, lease.id
+            );
+            if let Some(warning) = warning {
+                eprintln!("[chat/headless] note: {warning}");
+            }
+        }
+        GrantOutcome::Declined(reason) => {
+            eprintln!("[chat/headless] approved this call only; not remembered: {reason}")
+        }
+    }
+}
+
+/// The same information as a protocol event, so a screen can tell the person
+/// whether the answer was remembered. A client that does not know this event
+/// type ignores it. `None` when nothing was asked for.
+fn grant_event(grant: &GrantOutcome, warning: Option<&str>) -> Option<serde_json::Value> {
+    match grant {
+        GrantOutcome::NotRequested => None,
+        GrantOutcome::Granted(lease) => Some(json!({
+            "type": "grant_outcome",
+            "remembered": true,
+            "lease_id": lease.id,
+            "expires_at": lease.expires_at.to_rfc3339(),
+            "warning": warning,
+        })),
+        GrantOutcome::Declined(reason) => Some(json!({
+            "type": "grant_outcome",
+            "remembered": false,
+            "reason": reason,
+        })),
+    }
+}
+
 fn write_json_line(output: &mut impl Write, value: &serde_json::Value) -> Result<()> {
     serde_json::to_writer(&mut *output, value)?;
     output.write_all(b"\n")?;
@@ -769,6 +802,46 @@ mod tests {
 
     fn resume(json: &str) -> Result<HeadlessResumeInput> {
         parse_resume_input(json.as_bytes())
+    }
+
+    fn a_lease() -> crate::capability::lease::Lease {
+        let now = chrono::Utc::now();
+        crate::capability::lease::Lease {
+            id: "ab12cd34".into(),
+            subject: "human-grant:workspace".into(),
+            capability: "command.execute".into(),
+            repo_root: PathBuf::from("/p"),
+            allow: vec!["exact:cargo test".into()],
+            deny: vec![],
+            issued_by: "human:anh".into(),
+            issued_at: now,
+            expires_at: now + chrono::Duration::days(90),
+            invocation_budget: None,
+            remaining: None,
+            revoked: false,
+            parent_lease_id: None,
+        }
+    }
+
+    #[test]
+    fn a_remembered_answer_is_announced_with_its_lease_and_any_warning() {
+        let granted = GrantOutcome::Granted(Box::new(a_lease()));
+        let event = grant_event(&granted, Some("runs project code")).unwrap();
+        assert_eq!(event["type"], "grant_outcome");
+        assert_eq!(event["remembered"], true);
+        assert_eq!(event["lease_id"], "ab12cd34");
+        assert_eq!(event["warning"], "runs project code");
+        assert!(event["expires_at"].as_str().is_some_and(|text| text.contains('T')));
+        assert!(grant_event(&granted, None).unwrap()["warning"].is_null());
+    }
+
+    #[test]
+    fn a_refused_request_to_remember_says_why_and_a_plain_answer_says_nothing() {
+        let declined = GrantOutcome::Declined("'bash' runs whatever it is given".into());
+        let event = grant_event(&declined, None).unwrap();
+        assert_eq!((event["remembered"].as_bool(), event["reason"].as_str()), (Some(false), Some("'bash' runs whatever it is given")));
+        assert!(event.get("lease_id").is_none());
+        assert!(grant_event(&GrantOutcome::NotRequested, Some("ignored")).is_none());
     }
 
     #[test]

@@ -1,3 +1,5 @@
+use super::level::{CallFacts, ControlLevel, LevelVerdict};
+use super::level_shadow::{judge, record_shadow, MAX_ENFORCED_LEVEL};
 use super::TurnContext;
 use crate::capability::lease::{is_human_grant_subject, LeaseStore};
 use crate::capability::{manifest, ApprovalRequirement};
@@ -151,6 +153,39 @@ pub(crate) enum AuthorityDecision {
     },
 }
 
+/// The `path` argument of a file write or patch, the one other thing a level
+/// needs to know about a call.
+fn path_for_level(call: &ToolCall) -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct Args {
+        path: Option<String>,
+    }
+    serde_json::from_str::<Args>(&call.arguments_json).ok().and_then(|args| args.path)
+}
+
+/// Applies the person's control level to a call that would otherwise ask.
+/// Enforced only up to `MAX_ENFORCED_LEVEL`; above it the level just writes
+/// down what it would have approved. A declared intent still narrows an
+/// approval a level gives (the caller applies it afterwards).
+fn apply_control_level(
+    level: Option<ControlLevel>,
+    facts: &CallFacts,
+    decision_id: &str,
+    decision: AuthorityDecision,
+) -> AuthorityDecision {
+    let (Some(level), AuthorityDecision::HumanApprovalRequired { .. }) = (level, &decision) else {
+        return decision;
+    };
+    let judged = judge(level, MAX_ENFORCED_LEVEL, facts);
+    if judged.enforced == LevelVerdict::Allow {
+        return AuthorityDecision::Allow { decision_id: Some(decision_id.to_string()) };
+    }
+    if judged.shadow_only {
+        record_shadow(facts.root, level, facts, decision_id);
+    }
+    decision
+}
+
 pub(crate) trait RuntimeAuthority: Send + Sync {
     fn preflight_turn(&self, context: &TurnContext) -> AuthorityDecision;
     fn authorize_tool(&self, context: &TurnContext, call: &ToolCall) -> AuthorityDecision;
@@ -283,10 +318,12 @@ impl YanaAuthorityChain {
         // narrowed by a declared intent. Skipped when `human_approved`: the
         // person has just answered this very call, so it is recorded as
         // their approval, not as the lease their answer created.
-        if descriptor.approval == ApprovalRequirement::HumanApprovalPerCall
+        let control_level = (descriptor.approval == ApprovalRequirement::HumanApprovalPerCall
             && context.human_initiated
-            && !human_approved
-        {
+            && !human_approved)
+            .then(|| super::level_store::read_level(&context.session.repo_root));
+        // The strictest level asks every time, so it does not honor a remembered answer either.
+        if control_level.is_some_and(|level| level >= ControlLevel::Remember) {
             if let Some(lease_id) = super::human_grant::matching_human_grant(
                 &context.session.repo_root,
                 &context.session.session_id,
@@ -364,6 +401,16 @@ impl YanaAuthorityChain {
                 ),
             },
         };
+        let decision = narrow_by_intent(context, descriptor.name, command_text.as_deref(), decision);
+        let path = path_for_level(call);
+        let facts = CallFacts {
+            capability: descriptor.name,
+            command: command_text.as_deref(),
+            path: path.as_deref(),
+            root: &context.session.repo_root,
+            sandboxed: context.session.sandboxed,
+        };
+        let decision = apply_control_level(control_level, &facts, &decision_id, decision);
         let decision = narrow_by_intent(context, descriptor.name, command_text.as_deref(), decision);
         super::receipt::record(&decision_id, context, descriptor.name, &decision, None);
         decision

@@ -1191,6 +1191,75 @@ fn a_forged_human_grant_in_the_repository_authorizes_nothing() {
     ));
 }
 
+fn choose_level(root: &std::path::Path, level: level::ControlLevel) {
+    level_store::write_level(root, level, "human:test").unwrap();
+}
+
+fn shadow_lines(root: &std::path::Path) -> Vec<String> {
+    std::fs::read_to_string(root.join(".yana-ai/level-shadow.jsonl"))
+        .map(|text| text.lines().map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
+#[test]
+fn the_strictest_level_does_not_honor_a_remembered_answer() {
+    let root = project_with_lock_protocol();
+    remember(root.path(), "session-1", "cargo test", ApprovalScope::Always);
+    let context = request(root.path()).context;
+    let command = call_with_command("run_command", "cargo test");
+    assert!(matches!(YanaAuthorityChain.authorize_tool(&context, &command), AuthorityDecision::Allow { .. }));
+
+    choose_level(root.path(), level::ControlLevel::Strict);
+
+    assert!(needs_approval(&YanaAuthorityChain.authorize_tool(&context, &command)));
+}
+
+#[test]
+fn a_level_record_that_cannot_be_read_means_the_strictest_level() {
+    let root = project_with_lock_protocol();
+    remember(root.path(), "session-1", "cargo test", ApprovalScope::Always);
+    choose_level(root.path(), level::ControlLevel::Remember);
+    let record = crate::capability::lease::user_store_file(root.path(), "levels").unwrap();
+    std::fs::write(record, "garbage").unwrap();
+    let context = request(root.path()).context;
+
+    assert!(needs_approval(
+        &YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test"))
+    ));
+}
+
+#[test]
+fn a_level_above_the_enforced_one_asks_as_before_and_writes_down_what_it_would_have_done() {
+    let root = project_with_lock_protocol();
+    choose_level(root.path(), level::ControlLevel::SafeCommands);
+    let context = request(root.path()).context;
+
+    let decision = YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test"));
+
+    assert!(needs_approval(&decision), "levels above the enforced one must still ask");
+    let lines = shadow_lines(root.path());
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    let record: serde_json::Value = serde_json::from_str(&lines[0]).unwrap();
+    assert_eq!((record["level"].as_i64(), record["capability"].as_str()), (Some(4), Some("command.execute")));
+    assert!(!lines[0].contains("cargo test"), "the command text must not be in the record");
+}
+
+#[test]
+fn nothing_is_written_down_for_a_dangerous_call_or_below_the_levels_that_shadow() {
+    let root = project_with_lock_protocol();
+    let context = request(root.path()).context;
+
+    choose_level(root.path(), level::ControlLevel::Sandboxed);
+    for dangerous in ["rm -rf build", "git push origin main", "npm install x", "yana-rt level set 5", "bash -c ls"] {
+        let decision = YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", dangerous));
+        assert!(needs_approval(&decision), "{dangerous}");
+    }
+    choose_level(root.path(), level::ControlLevel::Remember);
+    YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test"));
+
+    assert!(shadow_lines(root.path()).is_empty(), "{:?}", shadow_lines(root.path()));
+}
+
 #[test]
 fn a_remembered_answer_does_not_help_a_subagent() {
     let root = project_with_lock_protocol();

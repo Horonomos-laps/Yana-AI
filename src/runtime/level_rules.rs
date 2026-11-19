@@ -36,6 +36,14 @@ const PACKAGE_CHANGES: &[(&str, &[&str])] = &[
     ("go", &["install", "get"]),
 ];
 
+/// Our own commands that change who may do what: the control level, leases,
+/// the away mode and the authority records. An agent never runs these for
+/// itself at any level, or a level could be raised by the agent it limits.
+const CONTROL_COMMANDS: &[(&str, &[&str])] = &[
+    ("yana-rt", &["level", "lease", "away", "authority"]),
+    ("yana-ai", &["level", "lease", "away", "authority"]),
+];
+
 /// Git subcommands that rewrite history, discard work or reach a remote.
 const DANGEROUS_GIT: &[&str] = &[
     "push", "reset", "clean", "rebase", "filter-branch", "checkout", "restore", "gc", "prune", "reflog",
@@ -102,7 +110,13 @@ pub(crate) fn dangerous_command(command: &str) -> Option<String> {
     let changes_packages = PACKAGE_CHANGES
         .iter()
         .any(|(tool, subs)| *tool == program && first.as_deref().is_some_and(|sub| subs.contains(&sub)));
-    changes_packages.then(|| format!("'{program}' would change what is installed or published"))
+    if changes_packages {
+        return Some(format!("'{program}' would change what is installed or published"));
+    }
+    let changes_control = CONTROL_COMMANDS
+        .iter()
+        .any(|(tool, subs)| *tool == program && first.as_deref().is_some_and(|sub| subs.contains(&sub)));
+    changes_control.then(|| "this changes what the agent is allowed to do, which only the person decides".to_string())
 }
 
 /// True for a shell or interpreter, which no level approves.
@@ -157,6 +171,7 @@ mod tests {
             "gh pr merge 1", "docker run x", "git push origin main", "git reset --hard", "git clean -fd",
             "git checkout -- .", "git rebase main", "npm install left-pad", "npm publish", "cargo install x",
             "cargo publish", "pip install x", "brew install x", "dd if=/dev/zero of=/dev/disk2",
+            "yana-rt level set 5", "yana-rt lease grant --subject x", "/usr/local/bin/yana-rt away start", "yana-ai authority receipts",
             "bad \"quote", "",
         ] {
             assert!(dangerous_command(command).is_some(), "{command:?} must be dangerous");
@@ -165,7 +180,10 @@ mod tests {
 
     #[test]
     fn ordinary_development_commands_are_not_dangerous() {
-        for command in ["git status", "git diff --stat", "git log -5", "cargo test", "cargo build --release", "npm test", "ls -la", "rg foo src"] {
+        for command in [
+            "git status", "git diff --stat", "git log -5", "cargo test", "cargo build --release", "npm test", "ls -la",
+            "rg foo src", "yana-rt --version", "yana-rt doctor",
+        ] {
             assert!(dangerous_command(command).is_none(), "{command:?} must not be dangerous");
         }
     }

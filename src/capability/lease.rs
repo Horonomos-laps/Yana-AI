@@ -212,17 +212,45 @@ pub struct LeaseStore {
 /// Where a person's remembered answers are kept: next to `config_trust`'s
 /// records, `<trust store>/human-grants`. Tests get a private directory per
 /// test thread and never touch a real home.
-fn human_grants_dir() -> Result<PathBuf> {
+fn user_store_dir(subdirectory: &str) -> Result<PathBuf> {
     #[cfg(test)]
     {
-        Ok(super::config_trust::empty_store_in_test().join("human-grants"))
+        Ok(super::config_trust::empty_store_in_test().join(subdirectory))
     }
     #[cfg(not(test))]
     {
         super::config_trust::store_dir()
-            .map(|dir| dir.join("human-grants"))
+            .map(|dir| dir.join(subdirectory))
             .map_err(|error| anyhow::anyhow!("{error}"))
     }
+}
+
+/// The file, for this repository, in one of the person's own stores (next to
+/// `config_trust`'s records), refusing any location inside the repository: a
+/// file there could be rewritten by a command the person approved.
+pub(crate) fn user_store_file(root: &Path, subdirectory: &str) -> Result<PathBuf> {
+    let dir = user_store_dir(subdirectory)?;
+    let repo = root
+        .canonicalize()
+        .with_context(|| format!("cannot resolve repository {}", root.display()))?;
+    let mut existing = dir.as_path();
+    while !existing.exists() {
+        existing = existing
+            .parent()
+            .context("the person's store has no existing parent directory")?;
+    }
+    let resolved = existing
+        .canonicalize()
+        .with_context(|| format!("cannot resolve {}", existing.display()))?;
+    if resolved.starts_with(&repo) {
+        bail!("the person's store must be outside the repository");
+    }
+    let name: String = Sha256::digest(repo.to_string_lossy().as_bytes())
+        .iter()
+        .take(16)
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    Ok(dir.join(format!("{name}.json")))
 }
 
 impl LeaseStore {
@@ -238,28 +266,7 @@ impl LeaseStore {
     /// person. Refuses to hand out a store that resolves inside the repository
     /// (same rule as `config_trust`).
     pub(crate) fn for_human_grants(root: &Path) -> Result<Self> {
-        let dir = human_grants_dir()?;
-        let repo = root
-            .canonicalize()
-            .with_context(|| format!("cannot resolve repository {}", root.display()))?;
-        let mut existing = dir.as_path();
-        while !existing.exists() {
-            existing = existing
-                .parent()
-                .context("the store for a person's grants has no existing parent directory")?;
-        }
-        let resolved = existing
-            .canonicalize()
-            .with_context(|| format!("cannot resolve {}", existing.display()))?;
-        if resolved.starts_with(&repo) {
-            bail!("the store for a person's grants must be outside the repository");
-        }
-        let name: String = Sha256::digest(repo.to_string_lossy().as_bytes())
-            .iter()
-            .take(16)
-            .map(|byte| format!("{byte:02x}"))
-            .collect();
-        Ok(Self { root: root.to_path_buf(), file: dir.join(format!("{name}.json")) })
+        Ok(Self { root: root.to_path_buf(), file: user_store_file(root, "human-grants")? })
     }
 
     /// Runs `action` as one `flock-v1` critical section scoped to this

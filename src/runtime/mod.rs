@@ -14,6 +14,10 @@ mod human_grant;
 mod level;
 #[allow(dead_code)]
 mod level_rules;
+#[allow(dead_code)]
+mod level_shadow;
+#[allow(dead_code)]
+mod level_store;
 mod origin;
 mod outcome;
 mod pending_approval;

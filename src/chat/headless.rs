@@ -20,8 +20,8 @@
 use crate::model::provider::{ChatMessage, ImageAttachment, Role};
 use crate::runtime::{
     grant_for_decision, project_code_warning, reason_with_disclosure, resume_turn, ApprovalScope,
-    CancellationToken, GrantOutcome, PendingApprovalStore, RuntimeEvent, TurnContext, TurnEngine,
-    TurnOrigin, TurnOutcome, TurnRequest, YanaAuthorityChain,
+    CancellationToken, GrantOutcome, GrantRequest, PendingApprovalStore, RuntimeEvent, TurnContext,
+    TurnEngine, TurnOrigin, TurnOutcome, TurnRequest, YanaAuthorityChain,
 };
 use crate::session_context::SessionContext;
 use anyhow::{Context, Result};
@@ -282,14 +282,14 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
     // this one call is already recorded above and stands either way.
     // Granted under the paused session's own root, the same value
     // `capability_decision` matches leases against, not the process's cwd.
-    match grant_for_decision(
-        &resolved.context.session.repo_root,
-        &resolved.context.session.session_id,
-        &resolved.pending_call,
-        input.decision,
-        &input.decided_by,
-        input.scope,
-    ) {
+    match grant_for_decision(&GrantRequest {
+        root: &resolved.context.session.repo_root,
+        session_id: &resolved.context.session.session_id,
+        call: &resolved.pending_call,
+        approved: input.decision,
+        decided_by: &input.decided_by,
+        scope: input.scope,
+    }) {
         GrantOutcome::NotRequested => {}
         GrantOutcome::Granted(lease) => {
             eprintln!(

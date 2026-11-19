@@ -35,7 +35,7 @@ pub(crate) use controller::{
 };
 pub(crate) use check::cmd_authority_check;
 pub(crate) use events::RuntimeEvent;
-pub(crate) use human_grant::{grant_for_decision, project_code_warning, ApprovalScope, GrantOutcome};
+pub(crate) use human_grant::{grant_for_decision, project_code_warning, ApprovalScope, GrantOutcome, GrantRequest};
 pub(crate) use level_cmd::{cmd_level_get, cmd_level_set};
 pub(crate) use origin::{TurnContext, TurnOrigin};
 pub(crate) use outcome::TurnOutcome;

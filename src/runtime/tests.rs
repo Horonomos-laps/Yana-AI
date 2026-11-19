@@ -1060,14 +1060,15 @@ fn project_with_lock_protocol() -> tempfile::TempDir {
 }
 
 fn remember(root: &std::path::Path, session: &str, command: &str, scope: ApprovalScope) {
-    let outcome = grant_for_decision(
+    let call = call_with_command("run_command", command);
+    let outcome = grant_for_decision(&GrantRequest {
         root,
-        session,
-        &call_with_command("run_command", command),
-        true,
-        "human:anh",
+        session_id: session,
+        call: &call,
+        approved: true,
+        decided_by: "human:anh",
         scope,
-    );
+    });
     assert!(matches!(outcome, GrantOutcome::Granted(_)), "{outcome:?}");
 }
 

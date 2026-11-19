@@ -92,67 +92,81 @@ pub(crate) fn project_code_warning(call: &ToolCall) -> Option<&'static str> {
 pub(crate) enum GrantOutcome {
     /// The person asked for "once" (or said nothing): nothing to remember.
     NotRequested,
-    Granted(Lease),
+    /// Boxed: a lease is much larger than the other outcomes.
+    Granted(Box<Lease>),
     /// A longer scope was asked for and refused; the reason is for the person.
     Declined(String),
 }
 
+/// Everything `grant_for_decision` needs to know about one answer.
+pub(crate) struct GrantRequest<'a> {
+    pub root: &'a Path,
+    pub session_id: &'a str,
+    /// The paused call the person answered.
+    pub call: &'a ToolCall,
+    pub approved: bool,
+    pub decided_by: &'a str,
+    pub scope: ApprovalScope,
+}
+
+/// The command this answer may remember, or the reason it may not.
+fn rememberable_command(request: &GrantRequest) -> Result<String, String> {
+    if !request.approved {
+        return Err("only an approval can be remembered, not a denial".into());
+    }
+    if request.session_id.trim().is_empty() || request.session_id.chars().any(char::is_control) {
+        return Err("this session has no usable id to remember the answer under".into());
+    }
+    let registry = manifest();
+    let Some(descriptor) = registry.get_by_tool_name(&request.call.name) else {
+        return Err(format!("'{}' is not a known tool", request.call.name));
+    };
+    if descriptor.name != GRANTABLE_CAPABILITY {
+        return Err(format!("'{}' can only be approved one call at a time", descriptor.name));
+    }
+    let Some(command) = command_text_for_lease(request.call) else {
+        return Err("the call has no command to remember".into());
+    };
+    match program_of(&command).filter(|program| is_never_remembered(program)) {
+        Some(program) => Err(format!(
+            "'{program}' runs whatever it is given, so remembering it would remember no specific command; approve it each time"
+        )),
+        None => Ok(command),
+    }
+}
+
 /// Records the person's answer when it asked for more than "once".
-pub(crate) fn grant_for_decision(
-    root: &Path,
-    session_id: &str,
-    call: &ToolCall,
-    approved: bool,
-    decided_by: &str,
-    scope: ApprovalScope,
-) -> GrantOutcome {
-    let minutes = match scope {
+pub(crate) fn grant_for_decision(request: &GrantRequest) -> GrantOutcome {
+    let minutes = match request.scope {
         ApprovalScope::Once => return GrantOutcome::NotRequested,
         ApprovalScope::Session => SESSION_GRANT_MINUTES,
         ApprovalScope::Always => ALWAYS_GRANT_MINUTES,
     };
-    if !approved {
-        return GrantOutcome::Declined("only an approval can be remembered, not a denial".into());
-    }
-    if session_id.trim().is_empty() || session_id.chars().any(char::is_control) {
-        return GrantOutcome::Declined("this session has no usable id to remember the answer under".into());
-    }
-    let registry = manifest();
-    let Some(descriptor) = registry.get_by_tool_name(&call.name) else {
-        return GrantOutcome::Declined(format!("'{}' is not a known tool", call.name));
+    let command = match rememberable_command(request) {
+        Ok(command) => command,
+        Err(reason) => return GrantOutcome::Declined(reason),
     };
-    if descriptor.name != GRANTABLE_CAPABILITY {
-        return GrantOutcome::Declined(format!("'{}' can only be approved one call at a time", descriptor.name));
-    }
-    let Some(command) = command_text_for_lease(call) else {
-        return GrantOutcome::Declined("the call has no command to remember".into());
-    };
-    if let Some(program) = program_of(&command).filter(|program| is_never_remembered(program)) {
-        return GrantOutcome::Declined(format!(
-            "'{program}' runs whatever it is given, so remembering it would remember no specific command; approve it each time"
-        ));
-    }
-    let subject = match scope {
-        ApprovalScope::Session => session_subject(session_id),
+    let subject = match request.scope {
+        ApprovalScope::Session => session_subject(request.session_id),
         _ => WORKSPACE_SUBJECT.to_string(),
     };
-    let store = match LeaseStore::for_human_grants(root) {
+    let store = match LeaseStore::for_human_grants(request.root) {
         Ok(store) => store,
         Err(error) => {
             return GrantOutcome::Declined(format!("could not open the store for remembered answers: {error:#}"));
         }
     };
     if let Some(existing) = store.find_live_exact(&subject, GRANTABLE_CAPABILITY, &command) {
-        return GrantOutcome::Granted(existing);
+        return GrantOutcome::Granted(Box::new(existing));
     }
     match store.grant_exact(
         subject,
         GRANTABLE_CAPABILITY.to_string(),
         &command,
-        decided_by.to_string(),
+        request.decided_by.to_string(),
         minutes,
     ) {
-        Ok(lease) => GrantOutcome::Granted(lease),
+        Ok(lease) => GrantOutcome::Granted(Box::new(lease)),
         Err(error) => GrantOutcome::Declined(format!("could not remember this answer: {error}")),
     }
 }
@@ -221,7 +235,8 @@ mod tests {
     }
 
     fn grant(root: &Path, session: &str, command: &str, approved: bool, scope: ApprovalScope) -> GrantOutcome {
-        grant_for_decision(root, session, &run_command(command), approved, "human:anh", scope)
+        let call = run_command(command);
+        grant_for_decision(&GrantRequest { root, session_id: session, call: &call, approved, decided_by: "human:anh", scope })
     }
 
     fn covered(root: &Path, session: &str, command: &str) -> bool {
@@ -290,7 +305,15 @@ mod tests {
         let unknown = ToolCall { id: "c".into(), name: "no_such_tool".into(), arguments_json: "{}".into() };
         let no_command = ToolCall { id: "c".into(), name: "run_command".into(), arguments_json: "{}".into() };
         for call in [unknown, no_command] {
-            let outcome = grant_for_decision(&root, "s1", &call, true, "human:anh", ApprovalScope::Always);
+            let request = GrantRequest {
+                root: &root,
+                session_id: "s1",
+                call: &call,
+                approved: true,
+                decided_by: "human:anh",
+                scope: ApprovalScope::Always,
+            };
+            let outcome = grant_for_decision(&request);
             assert!(matches!(outcome, GrantOutcome::Declined(_)), "{call:?}");
         }
         assert!(human_store(&root).list().unwrap().is_empty());

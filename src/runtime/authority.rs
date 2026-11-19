@@ -153,6 +153,27 @@ pub(crate) enum AuthorityDecision {
     },
 }
 
+/// An `Allow` that rests on a lease: narrowed by a declared intent, and
+/// recorded with the lease as its evidence only if it is still an `Allow`
+/// afterwards.
+fn allow_through_lease(
+    context: &TurnContext,
+    capability: &str,
+    command_text: Option<&str>,
+    lease_id: String,
+) -> AuthorityDecision {
+    let decision_id = uuid::Uuid::new_v4().to_string();
+    let decision = narrow_by_intent(
+        context,
+        capability,
+        command_text,
+        AuthorityDecision::Allow { decision_id: Some(decision_id.clone()) },
+    );
+    let evidence = matches!(decision, AuthorityDecision::Allow { .. }).then_some(lease_id);
+    super::receipt::record(&decision_id, context, capability, &decision, evidence);
+    decision
+}
+
 /// The `path` argument of a file write or patch, the one other thing a level
 /// needs to know about a call.
 fn path_for_level(call: &ToolCall) -> Option<String> {
@@ -288,25 +309,7 @@ impl YanaAuthorityChain {
                     )
                     .unwrap_or(None);
                 if let Some(lease_id) = matched_lease_id {
-                    let decision_id = uuid::Uuid::new_v4().to_string();
-                    let decision = narrow_by_intent(
-                        context,
-                        descriptor.name,
-                        command_text.as_deref(),
-                        AuthorityDecision::Allow {
-                            decision_id: Some(decision_id.clone()),
-                        },
-                    );
-                    let lease_id_for_receipt =
-                        matches!(decision, AuthorityDecision::Allow { .. }).then_some(lease_id);
-                    super::receipt::record(
-                        &decision_id,
-                        context,
-                        descriptor.name,
-                        &decision,
-                        lease_id_for_receipt,
-                    );
-                    return decision;
+                    return allow_through_lease(context, descriptor.name, command_text.as_deref(), lease_id);
                 }
             }
         }
@@ -330,25 +333,7 @@ impl YanaAuthorityChain {
                 descriptor.name,
                 command_text.as_deref(),
             ) {
-                let decision_id = uuid::Uuid::new_v4().to_string();
-                let decision = narrow_by_intent(
-                    context,
-                    descriptor.name,
-                    command_text.as_deref(),
-                    AuthorityDecision::Allow {
-                        decision_id: Some(decision_id.clone()),
-                    },
-                );
-                let lease_id_for_receipt =
-                    matches!(decision, AuthorityDecision::Allow { .. }).then_some(lease_id);
-                super::receipt::record(
-                    &decision_id,
-                    context,
-                    descriptor.name,
-                    &decision,
-                    lease_id_for_receipt,
-                );
-                return decision;
+                return allow_through_lease(context, descriptor.name, command_text.as_deref(), lease_id);
             }
         }
 

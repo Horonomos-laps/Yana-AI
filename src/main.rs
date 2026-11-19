@@ -141,6 +141,13 @@ enum Commands {
         #[command(subcommand)]
         action: LeaseAction,
     },
+    /// Control level: how much the agent may do without asking, from 1
+    /// (asks for everything) to 5 (sandboxed). Chosen by the person; the
+    /// record is kept outside the project.
+    Level {
+        #[command(subcommand)]
+        action: LevelAction,
+    },
     /// Confirm repo-supplied configuration (`.yana-ai/web-search.json`,
     /// `.yana-ai/mcp-servers.json`, `.yana-ai/lsp-servers.json`) before it is used, like `direnv allow`.
     /// A repository you cloned can ship these files; nothing in them is used
@@ -835,6 +842,25 @@ enum LeaseAction {
 }
 
 #[derive(Subcommand)]
+enum LevelAction {
+    /// Show the level in force, and whether its rules are enforced or only observed
+    Get {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Choose the level, 1 to 5. Levels above the enforced one are recorded
+    /// in shadow, not applied; `level get` says which.
+    Set {
+        level: u8,
+        /// Who is choosing, recorded with the level
+        #[arg(long, default_value = "human:cli")]
+        decided_by: String,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum AuthorityAction {
     /// List authority decision receipts recorded for this project, oldest
     /// first. Each receipt traces one capability decision: allow, deny,
@@ -1339,6 +1365,16 @@ fn dispatch() {
                 }
             }
         },
+        Commands::Level { action } => {
+            let outcome = match action {
+                LevelAction::Get { json } => runtime::cmd_level_get(json),
+                LevelAction::Set { level, decided_by, json } => runtime::cmd_level_set(level, &decided_by, json),
+            };
+            if let Err(error) = outcome {
+                eprintln!("[level] {error:#}");
+                std::process::exit(2);
+            }
+        }
         Commands::Authority { action } => match action {
             AuthorityAction::Receipts { last, json } => {
                 if let Err(error) = runtime::cmd_authority_receipts(last, json) {

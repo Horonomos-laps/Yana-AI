@@ -12,6 +12,7 @@ mod human_grant;
 // The control levels are wired into the authority chain in the next step.
 #[allow(dead_code)]
 mod level;
+mod level_cmd;
 #[allow(dead_code)]
 mod level_rules;
 #[allow(dead_code)]
@@ -35,6 +36,7 @@ pub(crate) use controller::{
 pub(crate) use check::cmd_authority_check;
 pub(crate) use events::RuntimeEvent;
 pub(crate) use human_grant::{grant_for_decision, project_code_warning, ApprovalScope, GrantOutcome};
+pub(crate) use level_cmd::{cmd_level_get, cmd_level_set};
 pub(crate) use origin::{TurnContext, TurnOrigin};
 pub(crate) use outcome::TurnOutcome;
 pub(crate) use pending_approval::{

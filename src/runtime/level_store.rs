@@ -43,17 +43,40 @@ fn read_record(root: &Path) -> Result<Option<LevelRecord>> {
     serde_json::from_str(&text).map(Some).with_context(|| format!("invalid level record {}", path.display()))
 }
 
-/// The level for this repository. Nothing chosen yet is the default level; a
-/// record that cannot be read or trusted is the strictest, and says why.
-pub(crate) fn read_level(root: &Path) -> ControlLevel {
+/// The level in force for a repository, who chose it and when, and why the
+/// record could not be trusted if it could not.
+#[derive(Debug)]
+pub(crate) struct LevelInfo {
+    pub level: ControlLevel,
+    pub set_by: Option<String>,
+    pub set_at: Option<DateTime<Utc>>,
+    pub problem: Option<String>,
+}
+
+/// Nothing chosen yet is the default level; a record that cannot be read or
+/// trusted is the strictest, with the reason.
+pub(crate) fn describe_level(root: &Path) -> LevelInfo {
     match read_record(root) {
-        Ok(Some(record)) => record.level,
-        Ok(None) => ControlLevel::default(),
-        Err(error) => {
-            eprintln!("[level] could not read the control level, using the strictest: {error:#}");
-            ControlLevel::Strict
+        Ok(Some(record)) => {
+            LevelInfo { level: record.level, set_by: Some(record.set_by), set_at: Some(record.set_at), problem: None }
         }
+        Ok(None) => LevelInfo { level: ControlLevel::default(), set_by: None, set_at: None, problem: None },
+        Err(error) => LevelInfo {
+            level: ControlLevel::Strict,
+            set_by: None,
+            set_at: None,
+            problem: Some(format!("{error:#}")),
+        },
     }
+}
+
+/// The level for this repository, saying why on stderr if it fell back to the strictest.
+pub(crate) fn read_level(root: &Path) -> ControlLevel {
+    let info = describe_level(root);
+    if let Some(problem) = &info.problem {
+        eprintln!("[level] could not read the control level, using the strictest: {problem}");
+    }
+    info.level
 }
 
 /// Records the level the person chose, replacing any earlier one.

@@ -155,6 +155,16 @@ pub(crate) fn command_matches(entry: &str, command_text: &str) -> bool {
 /// older build and silently turn the grant into a prefix match.
 const EXACT_PREFIX: &str = "exact:";
 
+/// Subjects of leases that record a person's own answer. Reserved: callers
+/// choose their own `agent_id` (`--subject`, `YANA_MCP_SUBJECT`,
+/// `for_subagent`), so without this a caller could name itself after a
+/// person's grant and spend it.
+pub(crate) const HUMAN_GRANT_SUBJECT_PREFIX: &str = "human-grant:";
+
+pub(crate) fn is_human_grant_subject(subject: &str) -> bool {
+    subject.trim().starts_with(HUMAN_GRANT_SUBJECT_PREFIX)
+}
+
 /// Longest command a human grant may record. A grant that long is almost
 /// certainly pasted text, not something to approve once and remember.
 pub(crate) const MAX_EXACT_COMMAND_CHARS: usize = 4096;
@@ -214,8 +224,38 @@ impl LeaseStore {
     /// prompt; each call needs a person's approval instead (contract section 17).
     const NEVER_LEASED: [&'static str; 1] = ["lsp.query"];
 
+    /// The general entry point (CLI, delegation). Refuses the reserved
+    /// `human-grant:` subjects: those mean "a person said yes", and only
+    /// `grant_exact` may issue them.
     #[allow(clippy::too_many_arguments)]
     pub fn grant(
+        &self,
+        subject: String,
+        capability: String,
+        allow: Vec<String>,
+        deny: Vec<String>,
+        issued_by: String,
+        expires_in_minutes: u64,
+        invocation_budget: Option<u32>,
+        parent_lease_id: Option<String>,
+    ) -> Result<Lease> {
+        if is_human_grant_subject(&subject) {
+            bail!("subjects starting with '{HUMAN_GRANT_SUBJECT_PREFIX}' are reserved for answers a person gave");
+        }
+        self.grant_unchecked(
+            subject,
+            capability,
+            allow,
+            deny,
+            issued_by,
+            expires_in_minutes,
+            invocation_budget,
+            parent_lease_id,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn grant_unchecked(
         &self,
         subject: String,
         capability: String,
@@ -290,6 +330,9 @@ impl LeaseStore {
         issued_by: String,
         expires_in_minutes: u64,
     ) -> Result<Lease> {
+        if !is_human_grant_subject(&subject) {
+            bail!("an exact grant is issued to a '{HUMAN_GRANT_SUBJECT_PREFIX}' subject only");
+        }
         let command = command.trim();
         if command.is_empty() {
             bail!("an exact grant needs a command");
@@ -303,7 +346,7 @@ impl LeaseStore {
         if !super::command::tokenize_command(command).is_ok_and(|tokens| !tokens.is_empty()) {
             bail!("an exact grant command could not be parsed");
         }
-        self.grant(
+        self.grant_unchecked(
             subject,
             capability,
             vec![format!("{EXACT_PREFIX}{command}")],
@@ -313,6 +356,24 @@ impl LeaseStore {
             None,
             None,
         )
+    }
+
+    /// A live (unrevoked, unexpired) grant that `grant_exact` already issued
+    /// for this very command, so answering the same question twice does not
+    /// pile up copies. Errors reading the store count as "none": the caller
+    /// then tries to grant, which fails closed on the same error.
+    pub fn find_live_exact(&self, subject: &str, capability: &str, command: &str) -> Option<Lease> {
+        let entry = format!("{EXACT_PREFIX}{}", command.trim());
+        let now = Utc::now();
+        self.list().ok()?.into_iter().find(|lease| {
+            lease.subject == subject
+                && lease.capability == capability
+                && !lease.revoked
+                && lease.expires_at > now
+                && lease.allow == [entry.clone()]
+                && lease.deny.is_empty()
+                && lease.parent_lease_id.is_none()
+        })
     }
 
     pub fn revoke(&self, id: &str) -> Result<()> {
@@ -1390,6 +1451,7 @@ mod tests {
             .grant_exact("human-grant:s1".into(), "command.execute".into(), "git status", "human:anh".into(), 60)
             .unwrap();
 
+        assert!(consume(&store, &root, "human-grant:s1", "git status"), "the grant itself must work");
         for chained in ["git status && rm -rf x", "git status; rm -rf x", "git status | sh", "git status $(id)"] {
             assert!(!consume(&store, &root, "human-grant:s1", chained), "{chained:?} must not match");
         }
@@ -1435,5 +1497,69 @@ mod tests {
         // real command has, so a rollback can only lose the grant, never widen it.
         assert!(!command_matches("exact:git status", "git status"));
         assert!(!command_matches("exact:git status", "git status --porcelain"));
+    }
+
+    #[test]
+    fn the_general_grant_refuses_the_reserved_human_grant_subjects() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        for subject in ["human-grant:workspace", "human-grant:session:s1", "  human-grant:x"] {
+            let result = store.grant(
+                subject.into(),
+                "command.execute".into(),
+                vec!["cargo test".into()],
+                vec![],
+                "agent".into(),
+                60,
+                None,
+                None,
+            );
+            assert!(result.is_err(), "{subject:?} must be reserved");
+        }
+        assert!(store.list().unwrap().is_empty());
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_exact_grant_is_issued_to_human_grant_subjects_only() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        let result = store.grant_exact("agent:worker".into(), "command.execute".into(), "cargo test", "x".into(), 60);
+        assert!(result.is_err());
+        assert!(store.list().unwrap().is_empty());
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_exact_grant_stops_matching_when_it_expires_or_is_revoked() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        store
+            .grant_exact("human-grant:s1".into(), "command.execute".into(), "cargo test", "human:anh".into(), 0)
+            .unwrap();
+        assert!(!consume(&store, &root, "human-grant:s1", "cargo test"), "a zero-minute grant is already expired");
+
+        let live = store
+            .grant_exact("human-grant:s1".into(), "command.execute".into(), "cargo fmt", "human:anh".into(), 60)
+            .unwrap();
+        assert!(consume(&store, &root, "human-grant:s1", "cargo fmt"));
+        store.revoke(&live.id).unwrap();
+        assert!(!consume(&store, &root, "human-grant:s1", "cargo fmt"));
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn find_live_exact_ignores_expired_revoked_and_different_commands() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        let live = store
+            .grant_exact("human-grant:s1".into(), "command.execute".into(), "cargo test", "human:anh".into(), 60)
+            .unwrap();
+        assert_eq!(store.find_live_exact("human-grant:s1", "command.execute", " cargo test ").unwrap().id, live.id);
+        assert!(store.find_live_exact("human-grant:s1", "command.execute", "cargo test --release").is_none());
+        assert!(store.find_live_exact("human-grant:s2", "command.execute", "cargo test").is_none());
+        store.revoke(&live.id).unwrap();
+        assert!(store.find_live_exact("human-grant:s1", "command.execute", "cargo test").is_none());
+        fs::remove_dir_all(&root).ok();
     }
 }

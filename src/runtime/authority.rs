@@ -1,5 +1,5 @@
 use super::TurnContext;
-use crate::capability::lease::LeaseStore;
+use crate::capability::lease::{is_human_grant_subject, LeaseStore};
 use crate::capability::{manifest, ApprovalRequirement};
 use crate::model::tool::ToolCall;
 
@@ -239,7 +239,11 @@ impl YanaAuthorityChain {
         // time-boxed, budget-boxed scope without a live human clicking
         // every call.
         if descriptor.approval == ApprovalRequirement::HumanApprovalPerCall {
-            if let Some(subject) = context.agent_id.as_deref().filter(|s| !s.is_empty()) {
+            if let Some(subject) = context
+                .agent_id
+                .as_deref()
+                .filter(|s| !s.is_empty() && !is_human_grant_subject(s))
+            {
                 let matched_lease_id = LeaseStore::for_root(&context.session.repo_root)
                     .try_consume_matching(
                         subject,
@@ -320,7 +324,11 @@ impl YanaAuthorityChain {
                 context.origin, descriptor.name
             );
             // Say which lease rule refused the call (read-only; never changes the verdict).
-            if let Some(subject) = context.agent_id.as_deref().filter(|s| !s.is_empty()) {
+            if let Some(subject) = context
+                .agent_id
+                .as_deref()
+                .filter(|s| !s.is_empty() && !is_human_grant_subject(s))
+            {
                 if let Some(detail) = LeaseStore::for_root(&context.session.repo_root).explain_miss(
                     subject,
                     descriptor.name,

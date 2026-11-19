@@ -19,9 +19,9 @@
 
 use crate::model::provider::{ChatMessage, ImageAttachment, Role};
 use crate::runtime::{
-    grant_for_decision, reason_with_disclosure, resume_turn, ApprovalScope, CancellationToken,
-    GrantOutcome, PendingApprovalStore, RuntimeEvent, TurnContext, TurnEngine, TurnOrigin,
-    TurnOutcome, TurnRequest, YanaAuthorityChain,
+    grant_for_decision, project_code_warning, reason_with_disclosure, resume_turn, ApprovalScope,
+    CancellationToken, GrantOutcome, PendingApprovalStore, RuntimeEvent, TurnContext, TurnEngine,
+    TurnOrigin, TurnOutcome, TurnRequest, YanaAuthorityChain,
 };
 use crate::session_context::SessionContext;
 use anyhow::{Context, Result};
@@ -280,8 +280,10 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
         .context("cannot resolve pending approval")?;
     // Remembering the answer never blocks the turn: the person's decision for
     // this one call is already recorded above and stands either way.
+    // Granted under the paused session's own root, the same value
+    // `capability_decision` matches leases against, not the process's cwd.
     match grant_for_decision(
-        &repo_root,
+        &resolved.context.session.repo_root,
         &resolved.context.session.session_id,
         &resolved.pending_call,
         input.decision,
@@ -289,10 +291,15 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
         input.scope,
     ) {
         GrantOutcome::NotRequested => {}
-        GrantOutcome::Granted(lease) => eprintln!(
-            "[chat/headless] remembered this answer as lease {} until {} (revoke: yana-rt lease revoke {})",
-            lease.id, lease.expires_at, lease.id
-        ),
+        GrantOutcome::Granted(lease) => {
+            eprintln!(
+                "[chat/headless] remembered this answer as lease {} until {} (revoke: yana-rt lease revoke {})",
+                lease.id, lease.expires_at, lease.id
+            );
+            if let Some(warning) = project_code_warning(&resolved.pending_call) {
+                eprintln!("[chat/headless] note: {warning}");
+            }
+        }
         GrantOutcome::Declined(reason) => {
             eprintln!("[chat/headless] approved this call only; not remembered: {reason}")
         }

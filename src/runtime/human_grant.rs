@@ -17,7 +17,7 @@
 //! it was not remembered.
 
 use super::authority::command_text_for_lease;
-use crate::capability::lease::{Lease, LeaseStore};
+use crate::capability::lease::{Lease, LeaseStore, HUMAN_GRANT_SUBJECT_PREFIX};
 use crate::capability::manifest;
 use crate::model::tool::ToolCall;
 use serde::Deserialize;
@@ -47,7 +47,45 @@ pub(crate) enum ApprovalScope {
 }
 
 pub(crate) fn session_subject(session_id: &str) -> String {
-    format!("human-grant:session:{session_id}")
+    format!("{HUMAN_GRANT_SUBJECT_PREFIX}session:{session_id}")
+}
+
+/// Programs that run whatever they are handed. The command text says nothing
+/// about what such a program will do, so remembering `bash` or `python3`
+/// would remember no specific command at all.
+const NEVER_REMEMBER_PROGRAMS: &[&str] = &[
+    "sh", "bash", "zsh", "fish", "dash", "ksh", "csh", "tcsh", "env", "xargs", "sudo", "doas", "su", "eval",
+    "exec", "nohup", "time", "timeout", "watch", "ssh", "scp", "node", "deno", "bun", "ruby", "perl", "php",
+    "lua", "osascript", "open",
+];
+
+/// Build and test tools. They are fine to remember, but they run code that
+/// lives in the project folder, which an edit can change later.
+const PROJECT_CODE_RUNNERS: &[&str] = &[
+    "cargo", "npm", "npx", "pnpm", "yarn", "make", "cmake", "gradle", "mvn", "go", "pytest", "just", "swift",
+    "xcodebuild",
+];
+
+fn program_of(command: &str) -> Option<String> {
+    let first = shell_words::split(command).ok()?.into_iter().next()?;
+    Some(Path::new(&first).file_name()?.to_str()?.to_string())
+}
+
+fn is_never_remembered(program: &str) -> bool {
+    NEVER_REMEMBER_PROGRAMS.contains(&program) || program.starts_with("python")
+}
+
+fn runs_project_code(command: &str) -> bool {
+    program_of(command).is_some_and(|program| PROJECT_CODE_RUNNERS.contains(&program.as_str()))
+}
+
+/// Said to the person after a remembered build or test command: later runs
+/// execute project code the person has not seen. A warning, not a refusal.
+pub(crate) fn project_code_warning(call: &ToolCall) -> Option<&'static str> {
+    let command = command_text_for_lease(call)?;
+    runs_project_code(&command).then_some(
+        "this command runs code from the project folder; later edits to that code will run without asking again",
+    )
 }
 
 #[derive(Debug)]
@@ -89,11 +127,20 @@ pub(crate) fn grant_for_decision(
     let Some(command) = command_text_for_lease(call) else {
         return GrantOutcome::Declined("the call has no command to remember".into());
     };
+    if let Some(program) = program_of(&command).filter(|program| is_never_remembered(program)) {
+        return GrantOutcome::Declined(format!(
+            "'{program}' runs whatever it is given, so remembering it would remember no specific command; approve it each time"
+        ));
+    }
     let subject = match scope {
         ApprovalScope::Session => session_subject(session_id),
         _ => WORKSPACE_SUBJECT.to_string(),
     };
-    match LeaseStore::for_root(root).grant_exact(
+    let store = LeaseStore::for_root(root);
+    if let Some(existing) = store.find_live_exact(&subject, GRANTABLE_CAPABILITY, &command) {
+        return GrantOutcome::Granted(existing);
+    }
+    match store.grant_exact(
         subject,
         GRANTABLE_CAPABILITY.to_string(),
         &command,
@@ -122,10 +169,17 @@ pub(super) fn matching_human_grant(
     [session_subject(session_id), WORKSPACE_SUBJECT.to_string()]
         .iter()
         .find_map(|subject| {
-            store
-                .try_consume_matching(subject, capability, root, Some(command_text))
-                .ok()
-                .flatten()
+            match store.try_consume_matching(subject, capability, root, Some(command_text)) {
+                Ok(found) => found,
+                Err(error) => {
+                    // Fail closed: the person is asked again. Say why, or a
+                    // remembered answer just seems to stop working.
+                    eprintln!(
+                        "[authority] could not check a remembered answer ({subject}, {capability}): {error:#}"
+                    );
+                    None
+                }
+            }
         })
 }
 
@@ -281,5 +335,53 @@ mod tests {
         assert!(parse("Session").is_err());
         assert!(parse("").is_err());
         assert_eq!(ApprovalScope::default(), ApprovalScope::Once);
+    }
+
+    #[test]
+    fn answering_the_same_question_twice_keeps_one_grant() {
+        let root = temp_root();
+        let GrantOutcome::Granted(first) = grant(&root, "s1", "cargo test", true, ApprovalScope::Session) else {
+            panic!("first grant refused");
+        };
+        let GrantOutcome::Granted(second) = grant(&root, "s1", "cargo test", true, ApprovalScope::Session) else {
+            panic!("second grant refused");
+        };
+        assert_eq!(first.id, second.id);
+        assert_eq!(LeaseStore::for_root(&root).list().unwrap().len(), 1);
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn shells_and_interpreters_are_never_remembered() {
+        let root = temp_root();
+        for command in [
+            "bash -c whoami",
+            "/bin/sh script.sh",
+            "python3 tool.py",
+            "python3.12 tool.py",
+            "env FOO=1 cargo test",
+            "sudo ls",
+            "node build.js",
+        ] {
+            let outcome = grant(&root, "s1", command, true, ApprovalScope::Always);
+            assert!(matches!(outcome, GrantOutcome::Declined(_)), "{command:?} must not be remembered");
+        }
+        assert!(LeaseStore::for_root(&root).list().unwrap().is_empty());
+        assert!(matches!(grant(&root, "s1", "cargo test", true, ApprovalScope::Always), GrantOutcome::Granted(_)));
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn build_tools_are_remembered_with_a_warning_about_project_code() {
+        assert!(project_code_warning(&run_command("cargo test")).is_some());
+        assert!(project_code_warning(&run_command("npm test")).is_some());
+        assert!(project_code_warning(&run_command("ls -la")).is_none());
+        assert!(project_code_warning(&run_command("")).is_none());
+    }
+
+    #[test]
+    fn the_workspace_subject_is_inside_the_reserved_namespace() {
+        assert!(WORKSPACE_SUBJECT.starts_with(HUMAN_GRANT_SUBJECT_PREFIX));
+        assert!(session_subject("s1").starts_with(HUMAN_GRANT_SUBJECT_PREFIX));
     }
 }

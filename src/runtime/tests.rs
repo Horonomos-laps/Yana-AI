@@ -1135,6 +1135,26 @@ fn a_remembered_answer_is_still_narrowed_by_a_declared_intent() {
 }
 
 #[test]
+fn a_caller_cannot_spend_a_persons_grant_by_naming_itself_after_it() {
+    let root = project_with_lock_protocol();
+    remember(root.path(), "session-1", "cargo test", ApprovalScope::Always);
+    remember(root.path(), "session-1", "cargo fmt", ApprovalScope::Session);
+
+    for (name, command) in [
+        ("human-grant:workspace", "cargo test"),
+        ("human-grant:session:session-1", "cargo fmt"),
+    ] {
+        let context = request(root.path()).context.for_subagent(name);
+        let decision =
+            YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", command));
+        assert!(
+            matches!(decision, AuthorityDecision::Deny { .. }),
+            "{name} must not spend a person's grant: {decision:?}"
+        );
+    }
+}
+
+#[test]
 fn a_remembered_answer_does_not_help_a_subagent() {
     let root = project_with_lock_protocol();
     remember(root.path(), "session-1", "cargo test", ApprovalScope::Always);

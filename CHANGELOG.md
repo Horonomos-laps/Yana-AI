@@ -8,6 +8,37 @@ All notable changes to Yana AI release packs are documented here.
 
 ---
 
+## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.5: remembered approvals, control levels, away mode (2026-11-19)
+
+Update with `cargo install yana-rt` and `pip install -U yana-ai`. The Yana app
+shows the new controls only with a `yana-rt` of 1.5.5 or newer.
+
+- **Remember an approval.** An approved command can be remembered for the
+  session or for the project. The grant is pinned to the exact command text and
+  stored outside the repository, in the person's own trust store. Shells and
+  interpreters (`bash`, `python`, `node`) are never remembered. Headless resume
+  accepts `scope` and answers with a `grant_outcome` event.
+- **Control levels.** `yana-rt level get|set` with five levels. Levels 1 and 2
+  are enforced. Levels 3 to 5 only observe: they write what they would have
+  allowed to `.yana-ai/level-shadow.jsonl` and change nothing yet. The lists of
+  dangerous and safe commands behind them are a judgment, not yet checked
+  against real use.
+- **Away mode.** `yana-rt away start|status|stop|report`. For a bounded time and
+  number of actions, covered work continues without asking; anything dangerous
+  or outside the box is parked in a queue the person reads later, and the
+  agent is told it was parked.
+- **Fix: an allowed command now runs.** A command allowed by a lease, a
+  remembered answer or the away mode was reported as started and then refused,
+  because only the per-call approval path had an implementation for it. Leases
+  that already existed now really run commands and write files. MCP, LSP and web
+  search still do not run on an allow alone.
+- Known limits: an approved command that is not sandboxed can still write under
+  `$HOME`, so the trust store is not tamper-proof against it; `decided_by` and
+  `scope` come from unauthenticated stdin; a remembered command is pinned by its
+  text, not by what the program does.
+
+---
+
 ## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.4: fresh-clone lockout fix, authority checks, status snapshot, repository split (2026-11-16)
 
 All three axes ship 1.5.4 from the same commit. npm is not published.

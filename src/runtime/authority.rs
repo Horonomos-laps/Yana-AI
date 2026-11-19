@@ -8,7 +8,7 @@ use crate::model::tool::ToolCall;
 /// not just by capability name. Returns `None` for every other capability,
 /// which makes a lease for them subject/capability/scope-only (no command
 /// text to match against).
-fn command_text_for_lease(call: &ToolCall) -> Option<String> {
+pub(super) fn command_text_for_lease(call: &ToolCall) -> Option<String> {
     #[derive(serde::Deserialize)]
     struct Args {
         command: Option<String>,
@@ -269,6 +269,45 @@ impl YanaAuthorityChain {
                     );
                     return decision;
                 }
+            }
+        }
+
+        // A person's remembered answer ("for this session" / "always") is a
+        // lease too, but one issued to the person's own turn, not to a
+        // delegated agent. Same position as the lease check above: after
+        // HALT and availability, before the approval gate, and still
+        // narrowed by a declared intent. Skipped when `human_approved`: the
+        // person has just answered this very call, so it is recorded as
+        // their approval, not as the lease their answer created.
+        if descriptor.approval == ApprovalRequirement::HumanApprovalPerCall
+            && context.human_initiated
+            && !human_approved
+        {
+            if let Some(lease_id) = super::human_grant::matching_human_grant(
+                &context.session.repo_root,
+                &context.session.session_id,
+                descriptor.name,
+                command_text.as_deref(),
+            ) {
+                let decision_id = uuid::Uuid::new_v4().to_string();
+                let decision = narrow_by_intent(
+                    context,
+                    descriptor.name,
+                    command_text.as_deref(),
+                    AuthorityDecision::Allow {
+                        decision_id: Some(decision_id.clone()),
+                    },
+                );
+                let lease_id_for_receipt =
+                    matches!(decision, AuthorityDecision::Allow { .. }).then_some(lease_id);
+                super::receipt::record(
+                    &decision_id,
+                    context,
+                    descriptor.name,
+                    &decision,
+                    lease_id_for_receipt,
+                );
+                return decision;
             }
         }
 

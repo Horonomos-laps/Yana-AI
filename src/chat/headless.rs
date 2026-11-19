@@ -19,8 +19,9 @@
 
 use crate::model::provider::{ChatMessage, ImageAttachment, Role};
 use crate::runtime::{
-    reason_with_disclosure, resume_turn, CancellationToken, PendingApprovalStore, RuntimeEvent,
-    TurnContext, TurnEngine, TurnOrigin, TurnOutcome, TurnRequest, YanaAuthorityChain,
+    grant_for_decision, reason_with_disclosure, resume_turn, ApprovalScope, CancellationToken,
+    GrantOutcome, PendingApprovalStore, RuntimeEvent, TurnContext, TurnEngine, TurnOrigin,
+    TurnOutcome, TurnRequest, YanaAuthorityChain,
 };
 use crate::session_context::SessionContext;
 use anyhow::{Context, Result};
@@ -275,8 +276,27 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
     let provider = wiring.provider;
     let store = PendingApprovalStore::for_root(&repo_root);
     let resolved = store
-        .resolve(&input.approval_id, input.decision, input.decided_by)
+        .resolve(&input.approval_id, input.decision, input.decided_by.clone())
         .context("cannot resolve pending approval")?;
+    // Remembering the answer never blocks the turn: the person's decision for
+    // this one call is already recorded above and stands either way.
+    match grant_for_decision(
+        &repo_root,
+        &resolved.context.session.session_id,
+        &resolved.pending_call,
+        input.decision,
+        &input.decided_by,
+        input.scope,
+    ) {
+        GrantOutcome::NotRequested => {}
+        GrantOutcome::Granted(lease) => eprintln!(
+            "[chat/headless] remembered this answer as lease {} until {} (revoke: yana-rt lease revoke {})",
+            lease.id, lease.expires_at, lease.id
+        ),
+        GrantOutcome::Declined(reason) => {
+            eprintln!("[chat/headless] approved this call only; not remembered: {reason}")
+        }
+    }
 
     let session = SessionContext::new(
         resolved.context.session.session_id.clone(),
@@ -374,6 +394,11 @@ struct HeadlessResumeInput {
     approval_id: String,
     decision: bool,
     decided_by: String,
+    /// How long an approval is remembered: "once" (the default), "session"
+    /// or "always". A scope other than "once" only makes sense with an
+    /// approval, so it is refused alongside a denial.
+    #[serde(default)]
+    scope: ApprovalScope,
     #[serde(default)]
     api_key: Option<String>,
 }
@@ -388,13 +413,20 @@ fn read_resume_input() -> Result<HeadlessResumeInput> {
     if bytes.len() as u64 > MAX_INPUT_BYTES {
         anyhow::bail!("headless resume input exceeds 10 MiB")
     }
+    parse_resume_input(&bytes)
+}
+
+fn parse_resume_input(bytes: &[u8]) -> Result<HeadlessResumeInput> {
     let input: HeadlessResumeInput =
-        serde_json::from_slice(&bytes).context("invalid headless resume JSON")?;
+        serde_json::from_slice(bytes).context("invalid headless resume JSON")?;
     if input.approval_id.trim().is_empty() {
         anyhow::bail!("headless resume approval_id must not be empty")
     }
     if input.decided_by.trim().is_empty() {
         anyhow::bail!("headless resume decided_by must not be empty")
+    }
+    if input.scope != ApprovalScope::Once && !input.decision {
+        anyhow::bail!("headless resume scope must be \"once\" when the decision is a denial")
     }
     Ok(input)
 }
@@ -727,6 +759,48 @@ fn write_json_line(output: &mut impl Write, value: &serde_json::Value) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn resume(json: &str) -> Result<HeadlessResumeInput> {
+        parse_resume_input(json.as_bytes())
+    }
+
+    #[test]
+    fn a_resume_without_a_scope_is_the_old_once_only_behavior() {
+        let input = resume(r#"{"approval_id":"a1","decision":true,"decided_by":"human:anh"}"#).unwrap();
+        assert_eq!(input.scope, ApprovalScope::Once);
+    }
+
+    #[test]
+    fn a_resume_reads_session_and_always_with_an_approval() {
+        for (word, scope) in [("session", ApprovalScope::Session), ("always", ApprovalScope::Always)] {
+            let json = format!(r#"{{"approval_id":"a1","decision":true,"decided_by":"h","scope":"{word}"}}"#);
+            assert_eq!(resume(&json).unwrap().scope, scope);
+        }
+    }
+
+    #[test]
+    fn a_resume_refuses_a_remembered_scope_alongside_a_denial() {
+        for word in ["session", "always"] {
+            let json = format!(r#"{{"approval_id":"a1","decision":false,"decided_by":"h","scope":"{word}"}}"#);
+            assert!(resume(&json).is_err(), "{word} with a denial must be refused");
+        }
+        assert!(resume(r#"{"approval_id":"a1","decision":false,"decided_by":"h","scope":"once"}"#).is_ok());
+    }
+
+    #[test]
+    fn a_resume_refuses_an_unknown_scope_a_wrong_type_and_extra_fields() {
+        for body in [
+            r#"{"approval_id":"a1","decision":true,"decided_by":"h","scope":"forever"}"#,
+            r#"{"approval_id":"a1","decision":true,"decided_by":"h","scope":""}"#,
+            r#"{"approval_id":"a1","decision":true,"decided_by":"h","scope":1}"#,
+            r#"{"approval_id":"a1","decision":true,"decided_by":"h","scope":null}"#,
+            r#"{"approval_id":"a1","decision":true,"decided_by":"h","grant":"always"}"#,
+            r#"{"approval_id":"","decision":true,"decided_by":"h"}"#,
+            "",
+        ] {
+            assert!(resume(body).is_err(), "{body:?} must be refused");
+        }
+    }
 
     // `Arc<dyn ChatProvider>` isn't `Debug`, so `.unwrap_err()` (which
     // requires the Ok-type to be Debug, for its own panic message) can't

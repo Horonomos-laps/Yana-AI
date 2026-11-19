@@ -1050,3 +1050,127 @@ fn no_intent_declared_leaves_existing_approval_behavior_unchanged() {
         AuthorityDecision::Allow { .. }
     ), "with no declaration at all, the four pre-existing terms alone must still govern, unchanged");
 }
+
+fn project_with_lock_protocol() -> tempfile::TempDir {
+    let root = tempfile::tempdir().unwrap();
+    let marker = root.path().join(yana_rt::flock_v1::PROTOCOL_FILE);
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, yana_rt::flock_v1::PROTOCOL_VERSION).unwrap();
+    root
+}
+
+fn remember(root: &std::path::Path, session: &str, command: &str, scope: ApprovalScope) {
+    let outcome = grant_for_decision(
+        root,
+        session,
+        &call_with_command("run_command", command),
+        true,
+        "human:anh",
+        scope,
+    );
+    assert!(matches!(outcome, GrantOutcome::Granted(_)), "{outcome:?}");
+}
+
+fn needs_approval(decision: &AuthorityDecision) -> bool {
+    matches!(decision, AuthorityDecision::HumanApprovalRequired { .. })
+}
+
+#[test]
+fn a_remembered_session_answer_lets_the_same_command_run_without_asking() {
+    let root = project_with_lock_protocol();
+    let context = request(root.path()).context; // human-initiated, session-1
+    let command = call_with_command("run_command", "cargo test");
+    assert!(needs_approval(&YanaAuthorityChain.authorize_tool(&context, &command)));
+
+    remember(root.path(), "session-1", "cargo test", ApprovalScope::Session);
+
+    assert!(matches!(
+        YanaAuthorityChain.authorize_tool(&context, &command),
+        AuthorityDecision::Allow { .. }
+    ));
+    let other_command = call_with_command("run_command", "cargo test --release");
+    assert!(needs_approval(&YanaAuthorityChain.authorize_tool(&context, &other_command)));
+
+    let other_session = SessionContext::new("session-2", root.path().to_path_buf(), "mock", "mock-model", true);
+    let other_context = TurnContext::new(other_session, TurnOrigin::Terminal, true);
+    assert!(needs_approval(&YanaAuthorityChain.authorize_tool(&other_context, &command)));
+}
+
+#[test]
+fn a_remembered_always_answer_applies_in_other_sessions() {
+    let root = project_with_lock_protocol();
+    remember(root.path(), "session-1", "cargo fmt", ApprovalScope::Always);
+    let other_session = SessionContext::new("session-9", root.path().to_path_buf(), "mock", "mock-model", true);
+    let context = TurnContext::new(other_session, TurnOrigin::Terminal, true);
+
+    assert!(matches!(
+        YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo fmt")),
+        AuthorityDecision::Allow { .. }
+    ));
+}
+
+#[test]
+fn a_remembered_answer_never_overrides_a_giam_thi_halt() {
+    let root = project_with_lock_protocol();
+    remember(root.path(), "session-1", "cargo test", ApprovalScope::Always);
+    std::fs::create_dir_all(root.path().join(".claude/state")).unwrap();
+    std::fs::write(root.path().join(".claude/state/GIAMTHI_HALT.lock"), "halt").unwrap();
+    let context = request(root.path()).context;
+
+    assert!(matches!(
+        YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test")),
+        AuthorityDecision::Deny { authority: AuthorityLayer::GiamThi, .. }
+    ));
+}
+
+#[test]
+fn a_remembered_answer_is_still_narrowed_by_a_declared_intent() {
+    let root = project_with_lock_protocol();
+    remember(root.path(), "session-1", "cargo test", ApprovalScope::Session);
+    let context = request(root.path()).context.with_intent(intent(&["repo.tree"], &[]));
+
+    assert!(needs_approval(
+        &YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test"))
+    ));
+}
+
+#[test]
+fn a_remembered_answer_does_not_help_a_subagent() {
+    let root = project_with_lock_protocol();
+    remember(root.path(), "session-1", "cargo test", ApprovalScope::Always);
+    let context = request(root.path()).context.for_subagent("worker-1");
+
+    assert!(matches!(
+        YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test")),
+        AuthorityDecision::Deny { .. }
+    ));
+}
+
+#[test]
+fn the_answer_just_given_is_attributed_to_the_person_not_to_the_lease_it_created() {
+    let root = project_with_lock_protocol();
+    remember(root.path(), "session-1", "cargo test", ApprovalScope::Session);
+    let context = request(root.path()).context;
+    let command = call_with_command("run_command", "cargo test");
+
+    YanaAuthorityChain.authorize_approved_tool(&context, &command);
+
+    let receipts = std::fs::read_to_string(root.path().join(".yana-ai/authority-receipts.jsonl")).unwrap();
+    assert!(!receipts.trim().is_empty(), "the decision must leave a receipt");
+    assert!(
+        !receipts.contains("\"lease_id\":\""),
+        "a call the person just approved must not be recorded as authorized by a lease: {receipts}"
+    );
+}
+
+#[test]
+fn a_later_call_covered_by_the_remembered_answer_is_recorded_against_its_lease() {
+    let root = project_with_lock_protocol();
+    remember(root.path(), "session-1", "cargo test", ApprovalScope::Session);
+    let context = request(root.path()).context;
+
+    YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test"));
+
+    let receipts = std::fs::read_to_string(root.path().join(".yana-ai/authority-receipts.jsonl")).unwrap();
+    assert!(receipts.contains("\"lease_id\":\""), "the lease must be the recorded evidence: {receipts}");
+}

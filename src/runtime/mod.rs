@@ -8,6 +8,7 @@ mod authority;
 mod check;
 mod controller;
 mod events;
+mod human_grant;
 mod origin;
 mod outcome;
 mod pending_approval;
@@ -24,6 +25,7 @@ pub(crate) use controller::{
 };
 pub(crate) use check::cmd_authority_check;
 pub(crate) use events::RuntimeEvent;
+pub(crate) use human_grant::{grant_for_decision, ApprovalScope, GrantOutcome};
 pub(crate) use origin::{TurnContext, TurnOrigin};
 pub(crate) use outcome::TurnOutcome;
 pub(crate) use pending_approval::{

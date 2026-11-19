@@ -1,3 +1,4 @@
+use super::away::AwayOutcome;
 use super::level::{CallFacts, ControlLevel, LevelVerdict};
 use super::level_shadow::{judge, record_shadow, MAX_ENFORCED_LEVEL};
 use super::TurnContext;
@@ -174,6 +175,21 @@ fn allow_through_lease(
     decision
 }
 
+/// A call the away mode could not approve: neither run nor refused for good.
+/// It is a denial the model can read, written so that it carries on with other
+/// work, and the item waits in the queue for the person.
+fn parked_decision(context: &TurnContext, capability: &str, reason: &str) -> AuthorityDecision {
+    let decision_id = uuid::Uuid::new_v4().to_string();
+    let decision = AuthorityDecision::Deny {
+        authority: AuthorityLayer::YanaControlPlane,
+        reason: format!(
+            "parked for the person, who is away ({reason}). It waits in a queue they will see; do not try it again, and carry on with work that does not need it"
+        ),
+    };
+    super::receipt::record(&decision_id, context, capability, &decision, None);
+    decision
+}
+
 /// The `path` argument of a file write or patch, the one other thing a level
 /// needs to know about a call.
 fn path_for_level(call: &ToolCall) -> Option<String> {
@@ -281,6 +297,14 @@ impl YanaAuthorityChain {
         }
 
         let command_text = command_text_for_lease(call);
+        let path = path_for_level(call);
+        let facts = CallFacts {
+            capability: descriptor.name,
+            command: command_text.as_deref(),
+            path: path.as_deref(),
+            root: &context.session.repo_root,
+            sandboxed: context.session.sandboxed,
+        };
 
         // Capability Lease (Milestone "Authority Depth", P0): a lease is
         // evidence supplied to authority, never a cached authority
@@ -337,6 +361,20 @@ impl YanaAuthorityChain {
             }
         }
 
+        // The away mode: the person left a box (time, a number of actions, a level)
+        // for the work to continue in. Inside it the call runs and is recorded;
+        // outside it the call is parked for the person, and the agent is told to
+        // carry on elsewhere. Only the person's own turn is covered.
+        if control_level.is_some() {
+            match super::away::judge(&context.session.repo_root, &facts, &context.session.session_id) {
+                AwayOutcome::NotAway => {}
+                AwayOutcome::Approved { away_id } => {
+                    return allow_through_lease(context, descriptor.name, command_text.as_deref(), format!("away:{away_id}"));
+                }
+                AwayOutcome::Parked { reason } => return parked_decision(context, descriptor.name, &reason),
+            }
+        }
+
         if descriptor.approval == ApprovalRequirement::HumanApprovalPerCall
             && !context.human_initiated
         {
@@ -387,14 +425,6 @@ impl YanaAuthorityChain {
             },
         };
         let decision = narrow_by_intent(context, descriptor.name, command_text.as_deref(), decision);
-        let path = path_for_level(call);
-        let facts = CallFacts {
-            capability: descriptor.name,
-            command: command_text.as_deref(),
-            path: path.as_deref(),
-            root: &context.session.repo_root,
-            sandboxed: context.session.sandboxed,
-        };
         let decision = apply_control_level(control_level, &facts, &decision_id, decision);
         let decision = narrow_by_intent(context, descriptor.name, command_text.as_deref(), decision);
         super::receipt::record(&decision_id, context, descriptor.name, &decision, None);

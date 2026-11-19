@@ -83,6 +83,27 @@ pub(crate) fn verdict(level: ControlLevel, facts: &CallFacts) -> LevelVerdict {
     }
 }
 
+/// A short reason `level` did not approve a call, for the person who finds it
+/// waiting. Only meaningful for a call `verdict` answered `Ask` to.
+pub(crate) fn why_not(facts: &CallFacts) -> String {
+    if let Some(command) = facts.command {
+        if let Some(reason) = dangerous_command(command) {
+            return reason;
+        }
+        if is_opaque_command(command) {
+            return "a shell or interpreter runs whatever it is given".to_string();
+        }
+    }
+    match facts.capability {
+        "file.write" | "file.patch" => {
+            "it writes a file the away mode does not cover (project structure, a secret, or a path that cannot be verified)"
+        }
+        "command.execute" => "the command is not on the short list the away mode runs on its own",
+        _ => "this kind of action always needs the person",
+    }
+    .to_string()
+}
+
 /// An existing directory inside the project, a file that is not sensitive.
 /// The path is judged where it really is: a symlink into `.github` is `.github`.
 fn ordinary_project_file(facts: &CallFacts) -> bool {

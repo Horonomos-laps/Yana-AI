@@ -144,9 +144,20 @@ enum Commands {
     /// Control level: how much the agent may do without asking, from 1
     /// (asks for everything) to 5 (sandboxed). Chosen by the person; the
     /// record is kept outside the project.
+    ///
+    /// DOCTOR_DISPATCH_EXEMPT: run directly as `yana-rt level set <n>` by the person at the terminal or by the app; it is deliberately not reachable through `bin/yana`, so a script or agent that only drives the wrapper cannot raise its own level. The authority chain also refuses to run it for an agent at every level.
     Level {
         #[command(subcommand)]
         action: LevelAction,
+    },
+    /// Away mode: let the work continue while you are gone, inside a box you
+    /// set first (time, a number of actions, a level from 3 to 5). Dangerous
+    /// actions are never approved: they wait in a queue for you.
+    ///
+    /// DOCTOR_DISPATCH_EXEMPT: run directly as `yana-rt away start` by the person or by the app before leaving; it is deliberately not reachable through `bin/yana`, so a script or agent that only drives the wrapper cannot open an away box for itself. The authority chain also refuses to run it for an agent at every level.
+    Away {
+        #[command(subcommand)]
+        action: AwayAction,
     },
     /// Confirm repo-supplied configuration (`.yana-ai/web-search.json`,
     /// `.yana-ai/mcp-servers.json`, `.yana-ai/lsp-servers.json`) before it is used, like `direnv allow`.
@@ -861,6 +872,45 @@ enum LevelAction {
 }
 
 #[derive(Subcommand)]
+enum AwayAction {
+    /// Start the box. Refused while another is on.
+    Start {
+        /// How long, from 5 minutes to 24 hours
+        #[arg(long, default_value_t = runtime::DEFAULT_AWAY_MINUTES)]
+        minutes: i64,
+        /// How many actions it may approve on its own, from 1 to 1000
+        #[arg(long, default_value_t = runtime::DEFAULT_AWAY_BUDGET)]
+        budget: u32,
+        /// 3 edits project files, 4 also runs safe commands, 5 also runs others inside a sandbox
+        #[arg(long, default_value_t = 4)]
+        level: u8,
+        /// Who is starting it, recorded with the box
+        #[arg(long, default_value = "human:cli")]
+        decided_by: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show whether the box is on, what is left of it, and how much is waiting for you
+    Status {
+        #[arg(long)]
+        json: bool,
+    },
+    /// End the box now
+    Stop {
+        #[arg(long)]
+        json: bool,
+    },
+    /// What waited for you: the box and the queue of parked actions
+    Report {
+        /// Empty the queue after showing it
+        #[arg(long)]
+        clear: bool,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum AuthorityAction {
     /// List authority decision receipts recorded for this project, oldest
     /// first. Each receipt traces one capability decision: allow, deny,
@@ -1372,6 +1422,20 @@ fn dispatch() {
             };
             if let Err(error) = outcome {
                 eprintln!("[level] {error:#}");
+                std::process::exit(2);
+            }
+        }
+        Commands::Away { action } => {
+            let outcome = match action {
+                AwayAction::Start { minutes, budget, level, decided_by, json } => {
+                    runtime::cmd_away_start(minutes, budget, level, &decided_by, json)
+                }
+                AwayAction::Status { json } => runtime::cmd_away_status(json),
+                AwayAction::Stop { json } => runtime::cmd_away_stop(json),
+                AwayAction::Report { clear, json } => runtime::cmd_away_report(clear, json),
+            };
+            if let Err(error) = outcome {
+                eprintln!("[away] {error:#}");
                 std::process::exit(2);
             }
         }

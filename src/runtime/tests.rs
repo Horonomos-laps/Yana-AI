@@ -1261,6 +1261,96 @@ fn nothing_is_written_down_for_a_dangerous_call_or_below_the_levels_that_shadow(
     assert!(shadow_lines(root.path()).is_empty(), "{:?}", shadow_lines(root.path()));
 }
 
+fn go_away(root: &std::path::Path, budget: u32, level: level::ControlLevel) {
+    away::start(root, 60, budget, level, "human:test").unwrap();
+}
+
+fn denial_reason(decision: &AuthorityDecision) -> String {
+    match decision {
+        AuthorityDecision::Deny { reason, .. } => reason.clone(),
+        other => panic!("expected a denial, got {other:?}"),
+    }
+}
+
+#[test]
+fn while_away_a_covered_call_runs_with_a_receipt_and_a_dangerous_one_is_parked() {
+    let root = project_with_lock_protocol();
+    go_away(root.path(), 5, level::ControlLevel::SafeCommands);
+    let context = request(root.path()).context;
+
+    let safe = YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test"));
+    assert!(matches!(safe, AuthorityDecision::Allow { .. }), "{safe:?}");
+    let receipts = std::fs::read_to_string(root.path().join(".yana-ai/authority-receipts.jsonl")).unwrap();
+    assert!(receipts.contains("\"lease_id\":\"away:"), "the away box must be the recorded evidence: {receipts}");
+
+    let dangerous = YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "rm -rf build"));
+    let reason = denial_reason(&dangerous);
+    assert!(reason.contains("parked for the person") && reason.contains("carry on"), "{reason}");
+    let waiting = away::parked_items(root.path()).unwrap();
+    assert_eq!(waiting.len(), 1);
+    assert_eq!((waiting[0].capability.as_str(), waiting[0].summary.as_str()), ("command.execute", "rm -rf build"));
+}
+
+#[test]
+fn stopping_or_running_out_of_the_box_goes_back_to_asking() {
+    let root = project_with_lock_protocol();
+    go_away(root.path(), 1, level::ControlLevel::SafeCommands);
+    let context = request(root.path()).context;
+    let command = call_with_command("run_command", "cargo test");
+
+    assert!(matches!(YanaAuthorityChain.authorize_tool(&context, &command), AuthorityDecision::Allow { .. }));
+    let second = YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo build"));
+    assert!(denial_reason(&second).contains("budget"), "the budget is a hard stop");
+
+    away::stop(root.path()).unwrap();
+    assert!(needs_approval(&YanaAuthorityChain.authorize_tool(&context, &command)));
+}
+
+#[test]
+fn the_away_box_does_not_cover_a_subagent_or_the_call_the_person_just_answered() {
+    let root = project_with_lock_protocol();
+    go_away(root.path(), 5, level::ControlLevel::SafeCommands);
+    let command = call_with_command("run_command", "cargo test");
+
+    let subagent = request(root.path()).context.for_subagent("worker-1");
+    let reason = denial_reason(&YanaAuthorityChain.authorize_tool(&subagent, &command));
+    assert!(reason.contains("non-human-initiated"), "a subagent is not the person's turn: {reason}");
+
+    let context = request(root.path()).context;
+    assert!(matches!(YanaAuthorityChain.authorize_approved_tool(&context, &command), AuthorityDecision::Allow { .. }));
+    assert_eq!(away::read_record(root.path()).unwrap().unwrap().used, 0, "the person's own answer spends nothing");
+}
+
+#[test]
+fn the_away_box_applies_whatever_level_is_stored() {
+    let root = project_with_lock_protocol();
+    choose_level(root.path(), level::ControlLevel::Strict);
+    go_away(root.path(), 5, level::ControlLevel::SafeCommands);
+    let context = request(root.path()).context;
+
+    let decision = YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test"));
+    assert!(matches!(decision, AuthorityDecision::Allow { .. }), "{decision:?}");
+}
+
+#[test]
+fn a_file_edit_while_away_follows_the_level_and_the_sensitive_path_list() {
+    let root = project_with_lock_protocol();
+    std::fs::create_dir_all(root.path().join("src")).unwrap();
+    std::fs::create_dir_all(root.path().join(".github")).unwrap();
+    go_away(root.path(), 5, level::ControlLevel::ProjectEdits);
+    let context = request(root.path()).context;
+    let write = |path: &str| ToolCall {
+        id: "call-1".into(),
+        name: "write_file".into(),
+        arguments_json: serde_json::json!({ "path": path, "content": "x" }).to_string(),
+    };
+
+    let ordinary = YanaAuthorityChain.authorize_tool(&context, &write("src/a.rs"));
+    assert!(matches!(ordinary, AuthorityDecision::Allow { .. }), "{ordinary:?}");
+    let structure = YanaAuthorityChain.authorize_tool(&context, &write(".github/ci.yml"));
+    assert!(denial_reason(&structure).contains("parked for the person"));
+}
+
 #[test]
 fn a_remembered_answer_does_not_help_a_subagent() {
     let root = project_with_lock_protocol();

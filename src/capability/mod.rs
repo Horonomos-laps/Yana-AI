@@ -25,6 +25,9 @@ pub mod harness;
 pub mod lease;
 pub mod lsp_config;
 pub mod lsp_disclosure;
+// Not called yet: the App Harness layer that runs external programs will call it.
+#[allow(dead_code)]
+pub mod output_verify;
 pub mod mcp_config;
 pub mod mcp_disclosure;
 pub mod patch;

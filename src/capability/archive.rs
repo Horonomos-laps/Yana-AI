@@ -72,7 +72,7 @@ pub struct ExtractionResult {
     pub total_bytes: u64,
 }
 
-fn open_archive(path: &Path) -> Result<zip::ZipArchive<File>, CapabilityError> {
+pub(super) fn open_archive(path: &Path) -> Result<zip::ZipArchive<File>, CapabilityError> {
     let file = File::open(path).map_err(|e| CapabilityError::Io {
         detail: format!("open archive: {e}"),
     })?;

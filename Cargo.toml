@@ -105,7 +105,7 @@ ureq       = { version = "3", features = ["json"],   optional = true }
 # YAML. Replaces serde_yml 0.0.13, an unmaintained shim pinned to noyalib
 # 0.0.5 (RUSTSEC-2026-0333: resource budgets not enforced on typed
 # deserialization, fixed in 0.0.53).
-noyalib    = { version = "0.0.58",                   optional = true }
+noyalib    = { version = "0.0.62",                   optional = true }
 sha2       = { version = "0.10",                     optional = true }
 libc       = { version = "0.2",                      optional = true }
 url        = { version = "2",                        optional = true }

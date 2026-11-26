@@ -125,12 +125,12 @@ pub(crate) fn dangerous_command(command: &str) -> Option<String> {
     changes_control.then(|| "this changes what the agent is allowed to do, which only the person decides".to_string())
 }
 
-/// True for a shell or interpreter, which no level approves.
 /// `rg --pre` and `--hostname-bin` name a program for ripgrep to run.
 fn rg_runs_a_program<'a>(program: &str, mut args: impl Iterator<Item = &'a String>) -> bool {
     program == "rg" && args.any(|arg| ["--pre", "--hostname-bin"].iter().any(|flag| arg == flag || arg.starts_with(&format!("{flag}="))))
 }
 
+/// True for a shell or interpreter, which no level approves.
 pub(crate) fn is_opaque_command(command: &str) -> bool {
     split_command(command).is_some_and(|(program, first, rest)| {
         // `find -exec` runs whatever follows, like a shell does.

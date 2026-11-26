@@ -12,9 +12,11 @@ All notable changes to Yana AI release packs are documented here.
 
 - `yana-rt os credential set|remove <provider>` keeps an API key in the macOS
   Keychain; the headless chat protocol uses it when a request carries none, so
-  Yana apps can share one saved key. The terminal chat still reads environment
+  Yana apps can share one saved key. `os credential models` returns a
+  provider's model list fetched with that key. The terminal chat still reads environment
   variables. `custom` and `9router` take no stored key. macOS only. Set
-  `YANA_NO_KEY_STORE` to stop chat turns from reading stored keys.
+  `YANA_NO_KEY_STORE` to stop chat turns and model listing from reading stored
+  keys.
 - Resuming an approval now requires the provider the turn was paused on, and a
   key for it; without one nothing runs and the approval stays usable.
 - Cloud chat requests no longer follow redirects.

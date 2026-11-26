@@ -1,8 +1,9 @@
 //! The one shared place for provider API keys, used by every Yana app.
 //!
 //! Boundary: keys are written, removed and read only here, and no command prints
-//! a value. A key is read for one purpose: to start or resume a chat turn with the
-//! catalog provider it belongs to, whose address is fixed in this binary. A
+//! a value. A key is read for two purposes: to start or resume a chat turn with
+//! the catalog provider it belongs to, and to fetch that provider's model list
+//! (`models.rs`). Both addresses are fixed in this binary. A
 //! `custom` provider never gets a stored key, because its address comes from the
 //! caller. Nor does a provider reached over plain `http`.
 //!
@@ -13,8 +14,9 @@
 //!   `yana-rt os` or `yana-rt chat` when invoked directly by those names;
 //!   matching names can be got around, and project code an approved or
 //!   level-approved command runs can reach whatever this user's processes can.
-//! - Only the headless chat protocol reads the store. The terminal chat, task
-//!   runner, remote adapter and failover routes still use environment variables.
+//! - Only the headless chat protocol and the model listing read the store. The
+//!   terminal chat, task runner, remote adapter and failover routes still use
+//!   environment variables.
 //!
 //! Storage is the macOS Keychain, service `yana-ai`, account = the provider's key
 //! variable name, the convention `platform::macos::secrets` already checks for
@@ -225,5 +227,6 @@ pub(crate) fn cmd_remove(provider: &str, extra: &[String]) -> Result<()> {
     Ok(())
 }
 
+pub(crate) mod models;
 #[cfg(test)]
 mod tests;

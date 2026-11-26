@@ -319,6 +319,13 @@ pub enum CredentialAction {
         #[arg(hide = true, trailing_var_arg = true, allow_hyphen_values = true)]
         extra: Vec<String>,
     },
+    /// Print a provider's model list, fetched with its stored key
+    Models {
+        /// Provider ID from the catalog
+        provider: String,
+        #[arg(hide = true, trailing_var_arg = true, allow_hyphen_values = true)]
+        extra: Vec<String>,
+    },
     /// Remove a provider's API key from the shared key store
     Remove {
         /// Provider ID from the catalog
@@ -805,6 +812,7 @@ pub fn dispatch(action: OsAction) -> Result<()> {
         OsAction::Credential { action } => match action {
             CredentialAction::Status { json } => credential::status(json)?,
             CredentialAction::Set { provider, extra } => key_store::cmd_set(&provider, &extra)?,
+            CredentialAction::Models { provider, extra } => key_store::models::cmd_models(&provider, &extra)?,
             CredentialAction::Remove { provider, extra } => key_store::cmd_remove(&provider, &extra)?,
         },
         OsAction::Resource { action } => dispatch_resource(action)?,

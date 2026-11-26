@@ -2,7 +2,8 @@
 //!
 //! This module owns only stdin/stdout framing. Inference and authority stay
 //! inside the canonical [`crate::runtime::TurnEngine`]. API keys travel in
-//! stdin JSON, never argv, so process listings cannot expose them.
+//! stdin JSON, never argv, so process listings cannot expose them. A request
+//! without one uses the key the person saved (`crate::os::key_store`).
 //!
 //! Authority Hardening item #5 (`ADR-015`): before this, `AwaitingApproval`
 //! was an unreachable `bail!()` here (confirmed by reading this file
@@ -183,7 +184,8 @@ pub(super) fn dispatch(provider_name: String, model: Option<String>) -> Result<(
     let tools = crate::chat::tools::catalog(&session);
     let tools = if plan_mode { crate::chat::tools::plan_mode_catalog(tools) } else { tools };
     let system = input.system.filter(|value| !value.is_empty());
-    let api_key = input.api_key.filter(|value| !value.is_empty());
+    // The request's key, else the one the person saved for this provider (os::key_store).
+    let api_key = crate::os::key_store::key_for_turn(&provider_name, input.api_key);
     let mut messages = history_messages;
     messages.push(ChatMessage::text(Role::User, input.task).with_images(images));
     let mut request = TurnRequest::new(context.clone(), model.clone(), messages).with_tools(tools);
@@ -259,6 +261,25 @@ pub(super) fn dispatch(provider_name: String, model: Option<String>) -> Result<(
     Ok(())
 }
 
+/// The approved call runs before the model is asked again, so a resume that has
+/// no key for that request stops here, with the approval still unused.
+fn check_key_for_resume(provider: &str, needs_key: bool, has_key: bool) -> Result<()> {
+    if needs_key && !has_key {
+        anyhow::bail!("no API key for '{provider}', so nothing was run and the approval is still waiting; add the key and try again");
+    }
+    Ok(())
+}
+
+/// A paused conversation continues only with the provider it was paused on.
+/// Otherwise a conversation held with a local model could be sent to a cloud
+/// provider, whose stored key would let it through.
+fn check_same_provider(paused: &str, resumed: &str) -> Result<()> {
+    if paused != resumed {
+        anyhow::bail!("this turn was paused on provider '{paused}'; resume it with --provider {paused}, not '{resumed}'");
+    }
+    Ok(())
+}
+
 /// Completes a paused turn from a LATER process invocation — the actual
 /// continuation half of item #5 for Desktop/packaged Web. Reads a
 /// `HeadlessResumeInput` from stdin (mirrors `dispatch`'s own stdin/NDJSON
@@ -275,6 +296,12 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
     }
     let provider = wiring.provider;
     let store = PendingApprovalStore::for_root(&repo_root);
+    // Both before the approval is used up: a resume that cannot go ahead can be tried again.
+    let paused = store.get(&input.approval_id).context("cannot resolve pending approval")?;
+    check_same_provider(&paused.context.session.provider_name, provider.name())?;
+    let api_key = crate::os::key_store::key_for_turn(&provider_name, input.api_key);
+    let pooled = std::env::var_os(format!("{}_POOL", provider.env_var())).is_some();
+    check_key_for_resume(provider.name(), provider.requires_key() && !pooled, api_key.is_some())?;
     let resolved = store
         .resolve(&input.approval_id, input.decision, input.decided_by.clone())
         .context("cannot resolve pending approval")?;
@@ -323,7 +350,7 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
         provider,
         executor,
         tools,
-        input.api_key.filter(|value| !value.is_empty()),
+        api_key,
         &cancellation,
         &mut |event| {
             if let RuntimeEvent::HumanApprovalRequired { authority, reason, .. } = &event {
@@ -890,6 +917,21 @@ mod tests {
         match result {
             Err(error) => error,
             Ok(_) => panic!("expected an error, got Ok"),
+        }
+    }
+
+    #[test]
+    fn a_resume_without_a_key_stops_before_the_approval_is_used() {
+        assert!(check_key_for_resume("openai", true, false).is_err());
+        assert!(check_key_for_resume("openai", true, true).is_ok());
+        assert!(check_key_for_resume("ollama", false, false).is_ok());
+    }
+
+    #[test]
+    fn a_paused_turn_cannot_move_to_another_provider() {
+        assert!(check_same_provider("ollama", "ollama").is_ok());
+        for other in ["openai", "", "Ollama", "ollama "] {
+            assert!(check_same_provider("ollama", other).is_err(), "{other:?}");
         }
     }
 

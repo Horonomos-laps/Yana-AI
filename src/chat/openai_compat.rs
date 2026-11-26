@@ -857,3 +857,19 @@ mod tests {
         assert_eq!(typed.status, None);
     }
 }
+
+#[cfg(test)]
+mod key_transport_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_local_router_takes_a_key_over_plain_http() {
+        for provider in [
+            openai(), groq(), deepseek(), openrouter(), xai(), novita(), nvidia(), minimax(), glm(), huggingface(), kimi(), mistral(),
+            together(), fireworks(), deepinfra(), cerebras(), sambanova(), perplexity(), qwen(), cohere(), ai21(), ernie(),
+        ] {
+            assert!(provider.url.starts_with("https://"), "{} -> {}", provider.provider_name, provider.url);
+        }
+        assert!(nine_router().url.starts_with("http://127.0.0.1:"));
+    }
+}

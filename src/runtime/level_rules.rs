@@ -15,13 +15,15 @@ use std::path::{Component, Path};
 const DANGEROUS_PROGRAMS: &[&str] = &[
     "rm", "rmdir", "mv", "dd", "mkfs", "chmod", "chown", "sudo", "doas", "kill", "pkill", "launchctl",
     "systemctl", "gh", "curl", "wget", "ssh", "scp", "rsync", "docker", "kubectl", "terraform",
+    // Reads and changes the Keychain, where provider keys are stored.
+    "security",
 ];
 
 /// Shells and interpreters run whatever they are handed, so the command text
 /// says nothing about what will happen. Never approved by a level.
 const OPAQUE_PROGRAMS: &[&str] = &[
     "sh", "bash", "zsh", "fish", "dash", "ksh", "env", "xargs", "eval", "exec", "nohup", "time", "timeout",
-    "watch", "node", "deno", "bun", "ruby", "perl", "php", "lua", "osascript", "open",
+    "watch", "nice", "arch", "caffeinate", "stdbuf", "node", "deno", "bun", "ruby", "perl", "php", "lua", "osascript", "open",
 ];
 
 /// Package managers and the subcommands that change what is installed or published.
@@ -37,11 +39,13 @@ const PACKAGE_CHANGES: &[(&str, &[&str])] = &[
 ];
 
 /// Our own commands that change who may do what: the control level, leases,
-/// the away mode and the authority records. An agent never runs these for
+/// the away mode and the authority records, plus `os` (which holds the stored
+/// provider keys) and `chat` (which spends them). An agent never runs these for
 /// itself at any level, or a level could be raised by the agent it limits.
 const CONTROL_COMMANDS: &[(&str, &[&str])] = &[
-    ("yana-rt", &["level", "lease", "away", "authority"]),
-    ("yana-ai", &["level", "lease", "away", "authority"]),
+    ("yana-rt", &["level", "lease", "away", "authority", "os", "chat"]),
+    ("yana-ai", &["level", "lease", "away", "authority", "os", "chat"]),
+    ("yana-ai-rt", &["level", "lease", "away", "authority", "os", "chat"]),
 ];
 
 /// Git subcommands that rewrite history, discard work or reach a remote.
@@ -101,7 +105,9 @@ pub(crate) fn dangerous_command(command: &str) -> Option<String> {
     let Some((program, first, _)) = split_command(command) else {
         return Some("the command could not be parsed".into());
     };
-    if DANGEROUS_PROGRAMS.contains(&program.as_str()) {
+    // A case-insensitive volume runs `SECURITY` too.
+    let lower = program.to_ascii_lowercase();
+    if DANGEROUS_PROGRAMS.contains(&lower.as_str()) {
         return Some(format!("'{program}' deletes, moves, changes permissions or reaches outside the project"));
     }
     if program == "git" && first.as_deref().is_some_and(|sub| DANGEROUS_GIT.contains(&sub)) {
@@ -115,13 +121,18 @@ pub(crate) fn dangerous_command(command: &str) -> Option<String> {
     }
     let changes_control = CONTROL_COMMANDS
         .iter()
-        .any(|(tool, subs)| *tool == program && first.as_deref().is_some_and(|sub| subs.contains(&sub)));
+        .any(|(tool, subs)| *tool == lower && first.as_deref().is_some_and(|sub| subs.contains(&sub)));
     changes_control.then(|| "this changes what the agent is allowed to do, which only the person decides".to_string())
 }
 
 /// True for a shell or interpreter, which no level approves.
 pub(crate) fn is_opaque_command(command: &str) -> bool {
-    split_command(command).is_some_and(|(program, _, _)| OPAQUE_PROGRAMS.contains(&program.as_str()) || program.starts_with("python"))
+    split_command(command).is_some_and(|(program, first, rest)| {
+        // `find -exec` runs whatever follows, like a shell does.
+        let runs_others = program == "find"
+            && first.iter().chain(rest.iter()).any(|arg| matches!(arg.as_str(), "-exec" | "-execdir" | "-ok" | "-okdir"));
+        runs_others || OPAQUE_PROGRAMS.contains(&program.as_str()) || program.starts_with("python")
+    })
 }
 
 /// True for a command on the short list a level may approve.
@@ -186,6 +197,22 @@ mod tests {
         ] {
             assert!(dangerous_command(command).is_none(), "{command:?} must not be dangerous");
         }
+    }
+
+    #[test]
+    fn commands_that_reach_stored_keys_are_never_approved_by_a_level() {
+        for command in [
+            "security find-generic-password -s yana-ai -a OPENAI_API_KEY -w", "/usr/bin/security dump-keychain",
+            "yana-rt os credential remove openai", "yana-rt os credential set openai", "yana-ai os credential status",
+            "yana-rt chat --headless --provider openai", "SECURITY dump-keychain", "YANA-RT os credential remove openai",
+            "yana-ai-rt chat --headless",
+        ] {
+            assert!(dangerous_command(command).is_some(), "{command:?} must be dangerous");
+        }
+        for command in ["find . -exec yana-rt os credential remove openai ;", "find . -execdir sh -c x ;", "find . -ok rm x ;", "nice security dump-keychain", "caffeinate yana-rt os status"] {
+            assert!(is_opaque_command(command) || dangerous_command(command).is_some(), "{command:?} must not be approved");
+        }
+        assert!(!is_opaque_command("find . -name main.rs"));
     }
 
     #[test]

@@ -55,6 +55,7 @@ cli = [
   "tree-sitter-javascript", "tree-sitter-python", "tree-sitter-go",
   "flock-v1",
   "session-db",
+  "security-framework",
 ]
 # Session database (WS4, docs/contracts/ws4-state.md section 4). Kept as its own
 # feature so a build without SQLite is still possible; it is part of `cli`.
@@ -160,6 +161,11 @@ portable-pty = { version = "0.9", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys       = { version = "0.3", optional = true }
 zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
+
+# The shared provider key store (src/os/key_store.rs). Already in Cargo.lock
+# through the TLS stack; pinned to that exact release, so no new package.
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = { version = "=3.7.0", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

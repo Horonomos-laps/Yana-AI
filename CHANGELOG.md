@@ -8,6 +8,22 @@ All notable changes to Yana AI release packs are documented here.
 
 ---
 
+## Unreleased: provider keys saved once
+
+- `yana-rt os credential set|remove <provider>` keeps an API key in the macOS
+  Keychain; the headless chat protocol uses it when a request carries none, so
+  Yana apps can share one saved key. The terminal chat still reads environment
+  variables. `custom` and `9router` take no stored key. macOS only. Set
+  `YANA_NO_KEY_STORE` to stop chat turns from reading stored keys.
+- Resuming an approval now requires the provider the turn was paused on, and a
+  key for it; without one nothing runs and the approval stays usable.
+- Cloud chat requests no longer follow redirects.
+- Control levels no longer approve `security`, `yana-rt os`, `yana-rt chat` or
+  `find -exec` by themselves, and MCP and LSP servers are marked as started by
+  the agent.
+
+---
+
 ## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.5: remembered approvals, control levels, away mode (2026-11-19)
 
 Update with `cargo install yana-rt` and `pip install -U yana-ai`. The Yana app

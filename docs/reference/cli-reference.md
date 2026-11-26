@@ -58,6 +58,9 @@ yana-rt os agent heartbeat <agent-id>
 yana-rt os agent list --include-chat-sessions
 
 yana-rt os credential status
+# macOS only; pipe the key from a password manager, so it is never a file or an argument
+your-password-manager-print-command | yana-rt os credential set openai
+yana-rt os credential remove openai
 
 yana-rt os resource set \
   --max-active-agents 4 \

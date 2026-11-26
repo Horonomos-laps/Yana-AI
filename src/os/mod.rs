@@ -10,6 +10,8 @@ mod health;
 // `ActorKind` directly for remote-request identity — same reasoning as
 // `resource`'s pub(crate) below, not a new precedent.
 pub(crate) mod identity;
+// pub(crate): the headless chat protocol asks it for the key of a turn.
+pub(crate) mod key_store;
 mod monitor;
 mod monitor_service;
 pub mod platform;
@@ -308,6 +310,21 @@ pub enum CredentialAction {
     Status {
         #[arg(long)]
         json: bool,
+    },
+    /// Save a provider's API key, read from a pipe, in the shared key store
+    Set {
+        /// Provider ID from the catalog
+        provider: String,
+        /// Refused without being repeated: a key typed here must not be echoed
+        #[arg(hide = true, trailing_var_arg = true, allow_hyphen_values = true)]
+        extra: Vec<String>,
+    },
+    /// Remove a provider's API key from the shared key store
+    Remove {
+        /// Provider ID from the catalog
+        provider: String,
+        #[arg(hide = true, trailing_var_arg = true, allow_hyphen_values = true)]
+        extra: Vec<String>,
     },
 }
 
@@ -787,6 +804,8 @@ pub fn dispatch(action: OsAction) -> Result<()> {
         OsAction::Agent { action } => dispatch_agent(action)?,
         OsAction::Credential { action } => match action {
             CredentialAction::Status { json } => credential::status(json)?,
+            CredentialAction::Set { provider, extra } => key_store::cmd_set(&provider, &extra)?,
+            CredentialAction::Remove { provider, extra } => key_store::cmd_remove(&provider, &extra)?,
         },
         OsAction::Resource { action } => dispatch_resource(action)?,
         OsAction::Governor { action } => dispatch_governor(action)?,

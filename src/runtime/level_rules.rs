@@ -126,12 +126,18 @@ pub(crate) fn dangerous_command(command: &str) -> Option<String> {
 }
 
 /// True for a shell or interpreter, which no level approves.
+/// `rg --pre` and `--hostname-bin` name a program for ripgrep to run.
+fn rg_runs_a_program<'a>(program: &str, mut args: impl Iterator<Item = &'a String>) -> bool {
+    program == "rg" && args.any(|arg| ["--pre", "--hostname-bin"].iter().any(|flag| arg == flag || arg.starts_with(&format!("{flag}="))))
+}
+
 pub(crate) fn is_opaque_command(command: &str) -> bool {
     split_command(command).is_some_and(|(program, first, rest)| {
         // `find -exec` runs whatever follows, like a shell does.
         let runs_others = program == "find"
             && first.iter().chain(rest.iter()).any(|arg| matches!(arg.as_str(), "-exec" | "-execdir" | "-ok" | "-okdir"));
-        runs_others || OPAQUE_PROGRAMS.contains(&program.as_str()) || program.starts_with("python")
+        let rg_runs = rg_runs_a_program(&program, first.iter().chain(rest.iter()));
+        runs_others || rg_runs || OPAQUE_PROGRAMS.contains(&program.as_str()) || program.starts_with("python")
     })
 }
 
@@ -139,6 +145,9 @@ pub(crate) fn is_opaque_command(command: &str) -> bool {
 pub(crate) fn is_safe_command(command: &str) -> bool {
     let Some((program, first, rest)) = split_command(command) else { return false };
     if program == "git" && rest.iter().chain(first.iter()).any(|arg| arg.starts_with("--output")) {
+        return false;
+    }
+    if rg_runs_a_program(&program, first.iter().chain(rest.iter())) {
         return false;
     }
     if SAFE_ANY_ARGS.contains(&program.as_str()) {
@@ -213,6 +222,20 @@ mod tests {
             assert!(is_opaque_command(command) || dangerous_command(command).is_some(), "{command:?} must not be approved");
         }
         assert!(!is_opaque_command("find . -name main.rs"));
+    }
+
+    #[test]
+    fn ripgrep_options_that_run_a_program_are_not_approved() {
+        for command in [
+            "rg --pre cat x", "rg --pre=cat x", "rg foo --pre ./run.sh", "/usr/local/bin/rg --pre sh .",
+            "rg --hostname-bin ./x y", "rg --hostname-bin=./x y",
+        ] {
+            assert!(!is_safe_command(command), "{command:?} must not be safe");
+            assert!(is_opaque_command(command), "{command:?} must be opaque");
+        }
+        for command in ["rg foo src", "rg --pretty foo", "rg --pre-glob '*.pdf' foo", "rg -- --pre-like"] {
+            assert!(is_safe_command(command), "{command:?} must stay safe");
+        }
     }
 
     #[test]

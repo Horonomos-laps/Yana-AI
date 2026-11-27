@@ -8,8 +8,17 @@ All notable changes to Yana AI release packs are documented here.
 
 ---
 
-## Unreleased: provider keys saved once
+## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.5: remembered approvals, control levels, away mode, shared provider keys (2026-11-27)
 
+Update with `cargo install yana-rt` and `pip install -U yana-ai`. The Yana app
+shows the new controls only with a `yana-rt` of 1.5.5 or newer.
+
+1.5.5 was prepared on 2026-11-19 and released on 2026-11-27 with the changes
+below added.
+
+- **Thirteen more providers** run on the OpenAI-compatible adapter: Mistral,
+  Together, Fireworks, DeepInfra, Cerebras, SambaNova, Perplexity, Qwen,
+  Cohere, AI21, ERNIE, vLLM and Jan. They were not called with real keys.
 - `yana-rt os credential set --if-absent <provider>` leaves an existing key
   alone (exit 3). `os credential status --json` also reports
   `native_secret_unknown` and `native_secret_removed`.
@@ -28,13 +37,8 @@ All notable changes to Yana AI release packs are documented here.
 - Control levels no longer approve `security`, `yana-rt os`, `yana-rt chat` or
   `find -exec` by themselves, and MCP and LSP servers are marked as started by
   the agent.
-
----
-
-## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.5: remembered approvals, control levels, away mode (2026-11-19)
-
-Update with `cargo install yana-rt` and `pip install -U yana-ai`. The Yana app
-shows the new controls only with a `yana-rt` of 1.5.5 or newer.
+- **Experimental:** `yana-rt bridge serve` opens a local socket for Yana apps.
+  No app connects to it yet and it has had no security review.
 
 - **Remember an approval.** An approved command can be remembered for the
   session or for the project. The grant is pinned to the exact command text and

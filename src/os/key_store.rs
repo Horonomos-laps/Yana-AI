@@ -166,7 +166,7 @@ fn resolve(provider: &str, requested: Option<String>, blocked: bool, store: &dyn
     let account = account_for(provider).ok()?;
     match store.get(&account) {
         // An item made by another tool may hold a stray newline or other text.
-        Ok(found) => found.and_then(|value| clean_key(&value).map_err(|why| eprintln!("[keys] {account}: {why}")).ok()),
+        Ok(found) => found.and_then(|value| clean_key(&value).map_err(|why| eprintln!("[keys] {provider}: {why}")).ok()),
         Err(error) => {
             eprintln!("[keys] {error}");
             None
@@ -289,7 +289,7 @@ pub(crate) fn cmd_set(provider: &str, if_absent: bool, extra: &[String]) -> Resu
     let account = if if_absent {
         let (account, added) = save_if_absent(provider, from_agent, input, &NativeKeyStore)?;
         if !added {
-            eprintln!("A key is already stored for {provider} ({account}); it was left as it is.");
+            eprintln!("A key is already stored for {provider}; it was left as it is.");
             std::process::exit(ALREADY_STORED_EXIT);
         }
         account
@@ -297,7 +297,7 @@ pub(crate) fn cmd_set(provider: &str, if_absent: bool, extra: &[String]) -> Resu
         save(provider, from_agent, input, &NativeKeyStore)?
     };
     note(&account, false).map_err(|error| error.context("the key was saved, but the removal record was not updated"))?;
-    println!("Saved the key for {provider} ({account}).");
+    println!("Saved the key for {provider}.");
     Ok(())
 }
 
@@ -306,7 +306,7 @@ pub(crate) fn cmd_remove(provider: &str, extra: &[String]) -> Result<()> {
     refuse_extra(extra)?;
     let account = forget(provider, inside_agent_command(), &NativeKeyStore)?;
     note(&account, true).map_err(|error| error.context("the key was removed, but the removal was not recorded"))?;
-    println!("No key is stored for {provider} ({account}) now.");
+    println!("No key is stored for {provider} now.");
     Ok(())
 }
 

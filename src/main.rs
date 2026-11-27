@@ -1,5 +1,6 @@
 #![cfg(feature = "cli")]
 
+mod bridge;
 mod bus;
 mod capability;
 mod chat;
@@ -88,6 +89,13 @@ fn parse_cli() -> Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Local hub that Yana apps connect to (experimental)
+    #[cfg(unix)]
+    #[command(hide = true)]
+    Bridge {
+        #[command(subcommand)]
+        action: bridge::BridgeAction,
+    },
     /// Task lifecycle — create, track, complete with evidence
     Task {
         #[command(subcommand)]
@@ -1023,6 +1031,13 @@ fn dispatch() {
 
     let cli = parse_cli();
     match cli.command {
+        #[cfg(unix)]
+        Commands::Bridge { action } => {
+            if let Err(error) = bridge::run(action) {
+                eprintln!("yana-rt bridge: {error:#}");
+                std::process::exit(1);
+            }
+        }
         Commands::Task { action } => match action {
             TaskAction::Create { name, scope, json } => task::cmd_task_create(name, scope, json),
             TaskAction::List { json } => task::cmd_task_list(json),

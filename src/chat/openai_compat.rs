@@ -145,7 +145,7 @@ pub fn nvidia() -> OpenAiCompatProvider {
 pub fn minimax() -> OpenAiCompatProvider {
     remote(
         "minimax",
-        "https://api.minimax.chat/v1/chat/completions",
+        "https://api.minimax.io/v1/chat/completions",
         // abab-family is MiniMax's own legacy tier now; the M-series
         // (M2 -> M2.1 -> M2.5 -> M2.7 -> M3) superseded it for chat.
         "MiniMax-M2.7",
@@ -314,7 +314,7 @@ pub fn deepinfra() -> OpenAiCompatProvider {
 }
 
 pub fn cerebras() -> OpenAiCompatProvider {
-    remote("cerebras", "https://api.cerebras.ai/v1/chat/completions", "llama-3.3-70b", "CEREBRAS_API_KEY")
+    remote("cerebras", "https://api.cerebras.ai/v1/chat/completions", "gpt-oss-120b", "CEREBRAS_API_KEY")
 }
 
 pub fn sambanova() -> OpenAiCompatProvider {
@@ -345,7 +345,7 @@ pub fn cohere() -> OpenAiCompatProvider {
     remote(
         "cohere",
         "https://api.cohere.ai/compatibility/v1/chat/completions",
-        "command-r-plus",
+        "command-a-03-2025",
         "COHERE_API_KEY",
     )
 }
@@ -855,5 +855,21 @@ mod tests {
         let typed = err.downcast_ref::<ProviderError>().expect("typed transport error");
         assert_eq!(typed.kind, ProviderErrorKind::Network);
         assert_eq!(typed.status, None);
+    }
+}
+
+#[cfg(test)]
+mod key_transport_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_local_router_takes_a_key_over_plain_http() {
+        for provider in [
+            openai(), groq(), deepseek(), openrouter(), xai(), novita(), nvidia(), minimax(), glm(), huggingface(), kimi(), mistral(),
+            together(), fireworks(), deepinfra(), cerebras(), sambanova(), perplexity(), qwen(), cohere(), ai21(), ernie(),
+        ] {
+            assert!(provider.url.starts_with("https://"), "{} -> {}", provider.provider_name, provider.url);
+        }
+        assert!(nine_router().url.starts_with("http://127.0.0.1:"));
     }
 }

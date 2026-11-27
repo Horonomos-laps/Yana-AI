@@ -1,8 +1,8 @@
 //! Starting and stopping a configured server as a child process, shared by the MCP
 //! and LSP clients (WS3 T1, section 17).
 //!
-//! The child gets an EMPTY environment plus `PATH` and the variable names the
-//! user listed for that server, the repository root as its working directory,
+//! The child gets an EMPTY environment plus `PATH`, the variable names the user
+//! listed for that server and the agent marker, the repository root as its working directory,
 //! no terminal input, and its error output discarded. It runs in its own
 //! process group so the whole tree can be killed. It is killed when dropped.
 
@@ -28,6 +28,9 @@ fn command_with_path(config: &ServerConfig, root: &Path, path: Option<std::ffi::
             command.env(name, value);
         }
     }
+    // After the configured names, so a configuration cannot unset it. A server is
+    // not a person: it gets no access to stored provider keys (os::key_store).
+    command.env(crate::capability::command::AGENT_CHILD_ENV, "1");
     command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true);
     #[cfg(unix)]
     command.process_group(0);
@@ -52,6 +55,18 @@ pub(crate) async fn kill_tree(child: &mut Child) {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn a_server_is_marked_as_started_by_the_agent() {
+        let root = tempfile::tempdir().unwrap();
+        let marker = crate::capability::command::AGENT_CHILD_ENV.to_string();
+        let config = ServerConfig { name: "a".into(), command: "true".into(), args: Vec::new(), env: vec![marker], timeout_secs: None, allowed_tools: None };
+        let command = command_with_path(&config, root.path(), None);
+        let marked = command.as_std().get_envs().any(|(name, value)| {
+            name == crate::capability::command::AGENT_CHILD_ENV && value.is_some_and(|value| value == "1")
+        });
+        assert!(marked);
+    }
 
     #[test]
     fn the_child_gets_a_path_without_relative_empty_and_in_repository_entries() {

@@ -460,7 +460,8 @@ enum Commands {
         /// Completes a paused turn from a prior `--headless` call that
         /// returned `{"type":"awaiting_approval",...}` (Authority
         /// Hardening item #5). Reads `{"approval_id","decision",
-        /// "decided_by",["api_key"]}` from stdin. Mutually exclusive with
+        /// "decided_by",["api_key"]}` from stdin; without "api_key" the saved
+        /// key is used. `--provider` must be the one the turn was paused on. Mutually exclusive with
         /// every other flag except `--provider`.
         #[arg(long, hide = true)]
         resume_approval: bool,

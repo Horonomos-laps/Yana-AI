@@ -8,6 +8,29 @@ All notable changes to Yana AI release packs are documented here.
 
 ---
 
+## Unreleased: provider keys saved once
+
+- `yana-rt os credential set --if-absent <provider>` leaves an existing key
+  alone (exit 3). `os credential status --json` also reports
+  `native_secret_unknown` and `native_secret_removed`.
+- MiniMax uses `api.minimax.io`; the default models of Cerebras and Cohere are
+  now `gpt-oss-120b` and `command-a-03-2025`.
+- `yana-rt os credential set|remove <provider>` keeps an API key in the macOS
+  Keychain; the headless chat protocol uses it when a request carries none, so
+  Yana apps can share one saved key. `os credential models` returns a
+  provider's model list fetched with that key. The terminal chat still reads environment
+  variables. `custom` and `9router` take no stored key. macOS only. Set
+  `YANA_NO_KEY_STORE` to stop chat turns and model listing from reading stored
+  keys.
+- Resuming an approval now requires the provider the turn was paused on, and a
+  key for it; without one nothing runs and the approval stays usable.
+- Cloud chat requests no longer follow redirects.
+- Control levels no longer approve `security`, `yana-rt os`, `yana-rt chat` or
+  `find -exec` by themselves, and MCP and LSP servers are marked as started by
+  the agent.
+
+---
+
 ## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.5: remembered approvals, control levels, away mode (2026-11-19)
 
 Update with `cargo install yana-rt` and `pip install -U yana-ai`. The Yana app

@@ -319,6 +319,10 @@ pub fn build_agent() -> ureq::Agent {
         .timeout_recv_response(Some(Duration::from_secs(90)))
         .timeout_recv_body(Some(Duration::from_secs(300)))
         .http_status_as_error(false)
+        // A redirect would carry vendor key headers to another address; none of
+        // the chat APIs needs one, so a 3xx comes back as an ordinary failed status.
+        .max_redirects(0)
+        .max_redirects_will_error(false)
         .build();
     ureq::Agent::new_with_config(config)
 }

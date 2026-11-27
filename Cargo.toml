@@ -113,7 +113,7 @@ url        = { version = "2",                        optional = true }
 # default features off, so the optional statement cache and its `hashlink`
 # dependency stay out. `bundled` compiles SQLite from C source (libsqlite3-sys
 # uses the `cc` crate) instead of linking a system library.
-rusqlite   = { version = "=0.41.1", default-features = false, features = ["bundled"], optional = true }
+rusqlite   = { version = "=0.43.0", default-features = false, features = ["bundled"], optional = true }
 # TUI for `yana chat` — synchronous poll/read API only, deliberately not
 # opting into crossterm's `event-stream` feature (would pull in async/
 # futures plumbing this crate has nowhere else).
@@ -137,7 +137,7 @@ tree-sitter-go         = { version = "0.25.0",  optional = true }
 # release (`=3.6.0`), never a pre-release, per Phase 8 Design Review's own
 # finding: a beta dependency on a security-critical guard path is a real
 # risk, not a style preference. Bump it deliberately, together with Cargo.lock.
-rmcp  = { version = "=3.9.0", features = ["server", "transport-io", "client"], optional = true }
+rmcp  = { version = "=3.11.0", features = ["server", "transport-io", "client"], optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 
 # Discord remote adapter only (see `discord` feature above). Sync WebSocket

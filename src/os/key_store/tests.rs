@@ -32,6 +32,14 @@ impl KeyStore for Fake {
         self.items.borrow_mut().insert(account.into(), value.into());
         Ok(())
     }
+    fn add(&self, account: &str, value: &str) -> Result<bool> {
+        if self.items.borrow().contains_key(account) {
+            return Ok(false);
+        }
+        self.changes.borrow_mut().push(format!("add {account}"));
+        self.items.borrow_mut().insert(account.into(), value.into());
+        Ok(true)
+    }
     fn remove(&self, account: &str) -> Result<()> {
         self.changes.borrow_mut().push(format!("remove {account}"));
         self.items.borrow_mut().remove(account);
@@ -181,4 +189,50 @@ fn real_keychain_round_trip() {
     assert_eq!(store.get(account).unwrap().as_deref(), Some("replaced"));
     store.remove(account).unwrap();
     assert_eq!(store.get(account).unwrap(), None);
+}
+
+#[test]
+fn saving_only_if_absent_leaves_a_newer_key_alone() {
+    let store = Fake::with("OPENAI_API_KEY", "newer");
+    let added = save_if_absent("openai", false, &mut &b"older"[..], &store).unwrap();
+    assert_eq!(added, ("OPENAI_API_KEY".to_string(), false));
+    assert_eq!(store.items.borrow()["OPENAI_API_KEY"], "newer");
+    assert!(store.changes.borrow().is_empty());
+    let added = save_if_absent("groq", false, &mut &b"first\n"[..], &store).unwrap();
+    assert_eq!(added, ("GROQ_API_KEY".to_string(), true));
+    assert_eq!(store.items.borrow()["GROQ_API_KEY"], "first");
+}
+
+#[test]
+fn saving_only_if_absent_keeps_the_other_refusals() {
+    let store = Fake::default();
+    assert!(save_if_absent("openai", true, &mut &b"theirs"[..], &store).is_err());
+    assert!(save_if_absent("openai", false, &mut &b"two words"[..], &store).is_err());
+    assert!(save_if_absent("custom", false, &mut &b"key"[..], &store).is_err());
+    assert!(store.items.borrow().is_empty());
+}
+
+#[test]
+fn a_removal_is_remembered_until_a_key_is_saved_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("nested").join("removed.json");
+    assert!(removed_accounts(&file).is_empty());
+    record_removal(&file, "OPENAI_API_KEY", true).unwrap();
+    record_removal(&file, "OPENAI_API_KEY", true).unwrap();
+    record_removal(&file, "GROQ_API_KEY", true).unwrap();
+    assert_eq!(removed_accounts(&file).into_iter().collect::<Vec<_>>(), ["GROQ_API_KEY", "OPENAI_API_KEY"]);
+    record_removal(&file, "OPENAI_API_KEY", false).unwrap();
+    assert_eq!(removed_accounts(&file).into_iter().collect::<Vec<_>>(), ["GROQ_API_KEY"]);
+}
+
+#[test]
+fn a_damaged_removal_record_reads_as_empty_and_is_rewritten() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("removed.json");
+    for bad in [&b""[..], b"{", b"{\"a\":1}", b"\xff\xfe"] {
+        std::fs::write(&file, bad).unwrap();
+        assert!(removed_accounts(&file).is_empty());
+    }
+    record_removal(&file, "OPENAI_API_KEY", true).unwrap();
+    assert_eq!(removed_accounts(&file).len(), 1);
 }

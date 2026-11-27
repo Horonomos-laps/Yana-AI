@@ -10,6 +10,11 @@ All notable changes to Yana AI release packs are documented here.
 
 ## Unreleased: provider keys saved once
 
+- `yana-rt os credential set --if-absent <provider>` leaves an existing key
+  alone (exit 3). `os credential status --json` also reports
+  `native_secret_unknown` and `native_secret_removed`.
+- MiniMax uses `api.minimax.io`; the default models of Cerebras and Cohere are
+  now `gpt-oss-120b` and `command-a-03-2025`.
 - `yana-rt os credential set|remove <provider>` keeps an API key in the macOS
   Keychain; the headless chat protocol uses it when a request carries none, so
   Yana apps can share one saved key. `os credential models` returns a

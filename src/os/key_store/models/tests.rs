@@ -12,6 +12,9 @@ impl KeyStore for Empty {
     fn set(&self, _account: &str, _value: &str) -> Result<()> {
         bail!("not used")
     }
+    fn add(&self, _account: &str, _value: &str) -> Result<bool> {
+        bail!("not used")
+    }
     fn remove(&self, _account: &str) -> Result<()> {
         bail!("not used")
     }
@@ -58,7 +61,8 @@ fn each_header_style_is_sent_as_the_provider_expects() {
 #[test]
 fn a_failed_status_reports_only_the_number() {
     let (url, server) = serve("401 Unauthorized", "", "sk-test is wrong".into());
-    assert_eq!(fetch(&url, Auth::Bearer, "sk-test").unwrap_err().to_string(), "HTTP 401");
+    let error = fetch(&url, Auth::Bearer, "sk-test").unwrap_err().to_string();
+    assert_eq!(error, "the provider rejected this key; check it or save a new one (HTTP 401)");
     server.join().unwrap();
 }
 

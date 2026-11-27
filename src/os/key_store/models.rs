@@ -30,7 +30,7 @@ const ENDPOINTS: &[(&str, &str, Auth)] = &[
     ("xai", "https://api.x.ai/v1/language-models", Auth::Bearer),
     ("novita", "https://api.novita.ai/openai/v1/models", Auth::Bearer),
     ("nvidia", "https://integrate.api.nvidia.com/v1/models", Auth::Bearer),
-    ("minimax", "https://api.minimaxi.com/v1/models", Auth::Bearer),
+    ("minimax", "https://api.minimax.io/v1/models", Auth::Bearer),
     ("glm", "https://open.bigmodel.cn/api/paas/v4/models", Auth::Bearer),
     ("huggingface", "https://router.huggingface.co/v1/models", Auth::Bearer),
     ("kimi", "https://api.moonshot.ai/v1/models", Auth::Bearer),
@@ -53,7 +53,7 @@ fn fetch(url: &str, auth: Auth, key: &str) -> Result<String> {
         bail!("the provider could not be reached");
     };
     if !response.status().is_success() {
-        bail!("HTTP {}", response.status().as_u16());
+        bail!("{}", refusal(response.status().as_u16()));
     }
     let Ok(body) = response.body_mut().with_config().limit(MAX_LIST_BYTES).read_to_string() else {
         bail!("the model list could not be read, or is larger than {MAX_LIST_BYTES} bytes");
@@ -62,6 +62,18 @@ fn fetch(url: &str, auth: Auth, key: &str) -> Result<String> {
         bail!("the provider's answer repeats the key, so it is not printed");
     }
     Ok(body)
+}
+
+/// The status in words; the provider's own body is never passed on.
+fn refusal(status: u16) -> String {
+    let reason = match status {
+        401 => "the provider rejected this key; check it or save a new one",
+        403 => "this key is not allowed to list models",
+        429 => "the provider's rate limit was reached; try again shortly",
+        500..=599 => "the provider has a server problem; try again later",
+        _ => return format!("HTTP {status}"),
+    };
+    format!("{reason} (HTTP {status})")
 }
 
 fn list(provider: &str, from_agent: bool, store: &dyn KeyStore) -> Result<String> {

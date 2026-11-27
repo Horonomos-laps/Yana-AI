@@ -313,6 +313,9 @@ pub enum CredentialAction {
     },
     /// Save a provider's API key, read from a pipe, in the shared key store
     Set {
+        /// Leave an existing key as it is and exit with status 3
+        #[arg(long)]
+        if_absent: bool,
         /// Provider ID from the catalog
         provider: String,
         /// Refused without being repeated: a key typed here must not be echoed
@@ -811,7 +814,7 @@ pub fn dispatch(action: OsAction) -> Result<()> {
         OsAction::Agent { action } => dispatch_agent(action)?,
         OsAction::Credential { action } => match action {
             CredentialAction::Status { json } => credential::status(json)?,
-            CredentialAction::Set { provider, extra } => key_store::cmd_set(&provider, &extra)?,
+            CredentialAction::Set { provider, if_absent, extra } => key_store::cmd_set(&provider, if_absent, &extra)?,
             CredentialAction::Models { provider, extra } => key_store::models::cmd_models(&provider, &extra)?,
             CredentialAction::Remove { provider, extra } => key_store::cmd_remove(&provider, &extra)?,
         },

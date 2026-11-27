@@ -145,7 +145,7 @@ pub fn nvidia() -> OpenAiCompatProvider {
 pub fn minimax() -> OpenAiCompatProvider {
     remote(
         "minimax",
-        "https://api.minimax.chat/v1/chat/completions",
+        "https://api.minimax.io/v1/chat/completions",
         // abab-family is MiniMax's own legacy tier now; the M-series
         // (M2 -> M2.1 -> M2.5 -> M2.7 -> M3) superseded it for chat.
         "MiniMax-M2.7",
@@ -314,7 +314,7 @@ pub fn deepinfra() -> OpenAiCompatProvider {
 }
 
 pub fn cerebras() -> OpenAiCompatProvider {
-    remote("cerebras", "https://api.cerebras.ai/v1/chat/completions", "llama-3.3-70b", "CEREBRAS_API_KEY")
+    remote("cerebras", "https://api.cerebras.ai/v1/chat/completions", "gpt-oss-120b", "CEREBRAS_API_KEY")
 }
 
 pub fn sambanova() -> OpenAiCompatProvider {
@@ -345,7 +345,7 @@ pub fn cohere() -> OpenAiCompatProvider {
     remote(
         "cohere",
         "https://api.cohere.ai/compatibility/v1/chat/completions",
-        "command-r-plus",
+        "command-a-03-2025",
         "COHERE_API_KEY",
     )
 }

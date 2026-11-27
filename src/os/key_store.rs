@@ -24,7 +24,13 @@
 //! item made earlier by another tool.
 
 use anyhow::{bail, Result};
+use std::collections::BTreeSet;
 use std::io::{IsTerminal, Read};
+use std::path::{Path, PathBuf};
+
+/// Exit status of `set --if-absent` when a key was already there.
+const ALREADY_STORED_EXIT: i32 = 3;
+const REMOVAL_RECORD_NAME: &str = "credentials-removed.json";
 
 /// Keychain service label, shared with the presence check.
 #[cfg(target_os = "macos")]
@@ -44,6 +50,8 @@ const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 pub(crate) trait KeyStore {
     fn get(&self, account: &str) -> Result<Option<String>>;
     fn set(&self, account: &str, value: &str) -> Result<()>;
+    /// Saves only when the account has no item, in one step. False when it has one.
+    fn add(&self, account: &str, value: &str) -> Result<bool>;
     /// Removing a key that is not there is not an error.
     fn remove(&self, account: &str) -> Result<()>;
 }
@@ -79,6 +87,16 @@ impl KeyStore for NativeKeyStore {
             .map_err(|error| anyhow::anyhow!("the Keychain refused to save {account} (status {})", error.code()))
     }
 
+    fn add(&self, account: &str, value: &str) -> Result<bool> {
+        let keychain = security_framework::os::macos::keychain::SecKeychain::default()
+            .map_err(|error| anyhow::anyhow!("the Keychain could not be opened (status {})", error.code()))?;
+        match keychain.add_generic_password(SERVICE, account, value.as_bytes()) {
+            Ok(()) => Ok(true),
+            Err(error) if error.code() == DUPLICATE_ITEM => Ok(false),
+            Err(error) => bail!("the Keychain refused to save {account} (status {})", error.code()),
+        }
+    }
+
     fn remove(&self, account: &str) -> Result<()> {
         match security_framework::passwords::delete_generic_password(SERVICE, account) {
             Ok(()) => Ok(()),
@@ -91,6 +109,9 @@ impl KeyStore for NativeKeyStore {
 /// `errSecItemNotFound`.
 #[cfg(target_os = "macos")]
 const ITEM_NOT_FOUND: i32 = -25300;
+/// `errSecDuplicateItem`.
+#[cfg(target_os = "macos")]
+const DUPLICATE_ITEM: i32 = -25299;
 
 #[cfg(not(target_os = "macos"))]
 impl KeyStore for NativeKeyStore {
@@ -98,6 +119,9 @@ impl KeyStore for NativeKeyStore {
         Ok(None)
     }
     fn set(&self, _account: &str, _value: &str) -> Result<()> {
+        bail!("storing keys is only available on macOS; elsewhere the app sends the key with each request")
+    }
+    fn add(&self, _account: &str, _value: &str) -> Result<bool> {
         bail!("storing keys is only available on macOS; elsewhere the app sends the key with each request")
     }
     fn remove(&self, _account: &str) -> Result<()> {
@@ -185,6 +209,53 @@ fn save(provider: &str, from_agent: bool, input: &mut dyn Read, store: &dyn KeyS
     Ok(account)
 }
 
+/// As `save`, but an existing key is left as it is: an app moving its older copy
+/// must not replace one saved since. The flag says whether the key was saved.
+fn save_if_absent(provider: &str, from_agent: bool, input: &mut dyn Read, store: &dyn KeyStore) -> Result<(String, bool)> {
+    refuse_agent(from_agent)?;
+    let account = account_for(provider)?;
+    let key = read_key(input)?;
+    let added = store.add(&account, &key)?;
+    Ok((account, added))
+}
+
+/// Where removals are remembered, so an app can ignore a copy it kept of a key
+/// the person has since removed. It holds account names only, never values.
+fn removal_record() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".yana").join(REMOVAL_RECORD_NAME))
+}
+
+/// An unreadable or damaged record reads as empty.
+pub(crate) fn removed_accounts(file: &Path) -> BTreeSet<String> {
+    std::fs::read(file).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default()
+}
+
+pub(crate) fn recorded_removals() -> BTreeSet<String> {
+    removal_record().map(|file| removed_accounts(&file)).unwrap_or_default()
+}
+
+/// Adds the account to the record, or takes it out. Replaced in one rename.
+fn record_removal(file: &Path, account: &str, removed: bool) -> Result<()> {
+    let mut accounts = removed_accounts(file);
+    let changed = if removed { accounts.insert(account.to_string()) } else { accounts.remove(account) };
+    if !changed {
+        return Ok(());
+    }
+    let parent = file.parent().ok_or_else(|| anyhow::anyhow!("the removal record has no directory"))?;
+    std::fs::create_dir_all(parent)?;
+    let staged = file.with_extension(format!("tmp.{}", std::process::id()));
+    std::fs::write(&staged, serde_json::to_vec(&accounts)?)?;
+    std::fs::rename(&staged, file)?;
+    Ok(())
+}
+
+fn note(account: &str, removed: bool) -> Result<()> {
+    match removal_record() {
+        Some(file) => record_removal(&file, account, removed),
+        None => bail!("HOME is not set"),
+    }
+}
+
 fn forget(provider: &str, from_agent: bool, store: &dyn KeyStore) -> Result<String> {
     refuse_agent(from_agent)?;
     let account = account_for(provider)?;
@@ -206,15 +277,26 @@ fn refuse_extra(extra: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// `yana-rt os credential set <provider>`. The key comes from a pipe, never from an
+/// `yana-rt os credential set [--if-absent] <provider>`. The key comes from a pipe, never from an
 /// argument (visible to other processes) or a terminal (it would be echoed).
-pub(crate) fn cmd_set(provider: &str, extra: &[String]) -> Result<()> {
+pub(crate) fn cmd_set(provider: &str, if_absent: bool, extra: &[String]) -> Result<()> {
     refuse_extra(extra)?;
     let stdin = std::io::stdin();
     if stdin.is_terminal() {
         bail!("pipe the key into this command, for example from a password manager; typing it here would show it");
     }
-    let account = save(provider, inside_agent_command(), &mut stdin.lock(), &NativeKeyStore)?;
+    let (input, from_agent) = (&mut stdin.lock(), inside_agent_command());
+    let account = if if_absent {
+        let (account, added) = save_if_absent(provider, from_agent, input, &NativeKeyStore)?;
+        if !added {
+            eprintln!("A key is already stored for {provider} ({account}); it was left as it is.");
+            std::process::exit(ALREADY_STORED_EXIT);
+        }
+        account
+    } else {
+        save(provider, from_agent, input, &NativeKeyStore)?
+    };
+    note(&account, false).map_err(|error| error.context("the key was saved, but the removal record was not updated"))?;
     println!("Saved the key for {provider} ({account}).");
     Ok(())
 }
@@ -223,6 +305,7 @@ pub(crate) fn cmd_set(provider: &str, extra: &[String]) -> Result<()> {
 pub(crate) fn cmd_remove(provider: &str, extra: &[String]) -> Result<()> {
     refuse_extra(extra)?;
     let account = forget(provider, inside_agent_command(), &NativeKeyStore)?;
+    note(&account, true).map_err(|error| error.context("the key was removed, but the removal was not recorded"))?;
     println!("No key is stored for {provider} ({account}) now.");
     Ok(())
 }

@@ -113,7 +113,7 @@ url        = { version = "2",                        optional = true }
 # default features off, so the optional statement cache and its `hashlink`
 # dependency stay out. `bundled` compiles SQLite from C source (libsqlite3-sys
 # uses the `cc` crate) instead of linking a system library.
-rusqlite   = { version = "=0.41.1", default-features = false, features = ["bundled"], optional = true }
+rusqlite   = { version = "=0.43.0", default-features = false, features = ["bundled"], optional = true }
 # TUI for `yana chat` — synchronous poll/read API only, deliberately not
 # opting into crossterm's `event-stream` feature (would pull in async/
 # futures plumbing this crate has nowhere else).

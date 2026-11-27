@@ -138,7 +138,7 @@ tree-sitter-go         = { version = "0.25.0",  optional = true }
 # release (`=3.6.0`), never a pre-release, per Phase 8 Design Review's own
 # finding: a beta dependency on a security-critical guard path is a real
 # risk, not a style preference. Bump it deliberately, together with Cargo.lock.
-rmcp  = { version = "=3.9.0", features = ["server", "transport-io", "client"], optional = true }
+rmcp  = { version = "=3.11.0", features = ["server", "transport-io", "client"], optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 
 # Discord remote adapter only (see `discord` feature above). Sync WebSocket

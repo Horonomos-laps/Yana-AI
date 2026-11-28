@@ -17,7 +17,6 @@ use crate::runtime::{ApprovedTool, ToolExecutor, TurnContext};
 const RESUME_REFUSED: &str = "blocked: the configuration of this external program could not be read, or is not the one that was approved (it, or the PATH of this process, may differ from the one that created the approval); ask again from the process that created the approval";
 
 pub(crate) struct ChatCapabilityExecutor {
-    use_sandbox: bool,
     /// For an approved `mcp_call`: exactly what the approver saw. When present
     /// the call runs that configuration or nothing; when absent (a resumed
     /// remote approval) the configuration is disclosed again right before the
@@ -33,8 +32,8 @@ pub(crate) struct ChatCapabilityExecutor {
 }
 
 impl ChatCapabilityExecutor {
-    pub(crate) fn new(use_sandbox: bool) -> Self {
-        Self { use_sandbox, approved_mcp: None, approved_lsp: None, resume_refused: false, plan_mode: false }
+    pub(crate) fn new() -> Self {
+        Self { approved_mcp: None, approved_lsp: None, resume_refused: false, plan_mode: false }
     }
 
     pub(crate) fn in_plan_mode(mut self, plan_mode: bool) -> Self {
@@ -205,8 +204,7 @@ impl ToolExecutor for ChatCapabilityExecutor {
                         call,
                         tools::run_command::execute(
                             &approved.context().session.repo_root,
-                            &validated.argv,
-                            self.use_sandbox,
+                            &validated.argv
                         ),
                     ),
                     Ok(validated) => tool_result(
@@ -792,7 +790,6 @@ mod tests {
             Vec::new(),
             false,
             true,
-            true,
         );
         app.settings.autosave = false;
         app
@@ -891,7 +888,7 @@ mod tests {
     fn terminal_executor_reads_through_the_canonical_capability() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("note.txt"), "hello").unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         let result = executor.execute(
             &context(root.path()),
             &ToolCall {
@@ -996,7 +993,7 @@ mod tests {
         // No backend configured: the capability itself refuses before any request,
         // which proves the approved path reaches it without touching the network.
         let root = tempfile::tempdir().unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         let result = execute_approved_tool(
             &YanaAuthorityChain,
             &executor,
@@ -1015,7 +1012,7 @@ mod tests {
     fn a_search_is_never_executed_without_approval() {
         let root = tempfile::tempdir().unwrap();
         write_search_config(root.path(), r#"{"endpoint":"https://good.example/q"}"#);
-        let result = ChatCapabilityExecutor::new(false).execute(&context(root.path()), &search_call(r#"{"query":"x"}"#));
+        let result = ChatCapabilityExecutor::new().execute(&context(root.path()), &search_call(r#"{"query":"x"}"#));
         assert!(result.is_error, "the unapproved executor path must not run it: {result:?}");
         assert!(result.output.contains("no implementation") && !result.output.contains("good.example"), "{result:?}");
     }
@@ -1023,7 +1020,7 @@ mod tests {
     #[test]
     fn terminal_executor_never_executes_mutating_tools() {
         let root = tempfile::tempdir().unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         let result = executor.execute(
             &context(root.path()),
             &ToolCall {
@@ -1039,7 +1036,7 @@ mod tests {
     #[test]
     fn canonical_approved_path_executes_mutating_tools_once() {
         let root = tempfile::tempdir().unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         let call = ToolCall {
             id: "call-1".into(),
             name: "run_command".into(),
@@ -1064,7 +1061,7 @@ mod tests {
     #[test]
     fn terminal_executor_never_writes_files_without_approval() {
         let root = tempfile::tempdir().unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         let result = executor.execute(
             &context(root.path()),
             &ToolCall {
@@ -1085,7 +1082,7 @@ mod tests {
     #[test]
     fn canonical_approved_path_writes_a_file_once() {
         let root = tempfile::tempdir().unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         let call = ToolCall {
             id: "call-1".into(),
             name: "write_file".into(),
@@ -1113,7 +1110,7 @@ mod tests {
     #[test]
     fn canonical_approved_path_rejects_an_unknown_write_kind() {
         let root = tempfile::tempdir().unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         let call = ToolCall {
             id: "call-1".into(),
             name: "write_file".into(),
@@ -1140,7 +1137,7 @@ mod tests {
     fn canonical_approved_path_writes_a_config_file_once() {
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(root.path().join("core/config")).unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         let call = ToolCall {
             id: "call-1".into(),
             name: "write_config".into(),
@@ -1170,7 +1167,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(root.path().join("core/config")).unwrap();
         std::fs::write(root.path().join("core/config/core-lock.json"), "{}").unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         let call = ToolCall {
             id: "call-1".into(),
             name: "write_config".into(),
@@ -1209,7 +1206,7 @@ mod tests {
     fn an_unapproved_patch_file_call_is_denied_and_changes_nothing() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("a.txt"), "one\ntwo\n").unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         let result = executor.execute(&context(root.path()), &patch_call("a.txt", "two", "2"));
         assert!(result.denied);
         assert_eq!(std::fs::read_to_string(root.path().join("a.txt")).unwrap(), "one\ntwo\n");
@@ -1219,7 +1216,7 @@ mod tests {
     fn plan_mode_refuses_an_approved_write_and_changes_nothing() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("a.txt"), "one\ntwo\n").unwrap();
-        let executor = ChatCapabilityExecutor::new(false).in_plan_mode(true);
+        let executor = ChatCapabilityExecutor::new().in_plan_mode(true);
         let result = execute_approved_tool(
             &YanaAuthorityChain,
             &executor,
@@ -1242,7 +1239,7 @@ mod tests {
     fn canonical_approved_path_patches_a_file_once_and_keeps_a_backup() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("a.txt"), "one\ntwo\nthree\n").unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         let result = execute_approved_tool(
             &YanaAuthorityChain,
             &executor,
@@ -1262,7 +1259,7 @@ mod tests {
     fn an_approved_patch_that_does_not_match_writes_nothing_and_tells_the_model() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("a.txt"), "one\ntwo\n").unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         let result = execute_approved_tool(
             &YanaAuthorityChain,
             &executor,
@@ -1283,7 +1280,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let outside = tempfile::tempdir().unwrap();
         std::fs::write(outside.path().join("secret.txt"), "keep\n").unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         for path in [format!("../{}/secret.txt", outside.path().file_name().unwrap().to_string_lossy()), "nope.txt".to_string()] {
             let result = execute_approved_tool(
                 &YanaAuthorityChain,
@@ -1303,7 +1300,7 @@ mod tests {
     fn a_malformed_patch_call_is_reported_not_applied() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("a.txt"), "one\n").unwrap();
-        let executor = ChatCapabilityExecutor::new(false);
+        let executor = ChatCapabilityExecutor::new();
         for arguments in [r#"{"path":"a.txt"}"#, r#"{"path":"a.txt","edits":[{"old":"one","new":"1","replace_al":true}]}"#, "not json"] {
             let call = ToolCall { id: "call-m".into(), name: "patch_file".into(), arguments_json: arguments.into() };
             let result = execute_approved_tool(

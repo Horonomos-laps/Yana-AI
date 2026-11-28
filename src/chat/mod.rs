@@ -19,8 +19,7 @@
 //! judgment function `core/hooks/guard-destructive.sh` and Program J's
 //! MCP spike, `src/mcp.rs`, both already use — never a second pattern
 //! list) as a hard pre-check, then a mandatory y/N in the TUI before
-//! anything executes, then (by default) routing through
-//! `core/scripts/sandbox-exec.sh` for real isolation on top of both.
+//! anything executes. The command then runs without isolation.
 //! `read_file` needs no such gate — it's read-only and sandboxed to the
 //! repo root (Gate L5 path-traversal check), so it runs inline without
 //! pausing the turn.
@@ -169,7 +168,6 @@ pub fn dispatch(
     system: Option<String>,
     resume: Option<String>,
     verbose: bool,
-    use_sandbox: bool,
 ) {
     let repo_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let chat_settings = settings::load(&repo_root).unwrap_or_default();
@@ -248,7 +246,6 @@ pub fn dispatch(
         history,
         verbose,
         resumed,
-        use_sandbox,
     );
     if let Err(e) = tui::run(&mut guard, app) {
         drop(guard); // restore the terminal before printing, not after

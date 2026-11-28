@@ -54,6 +54,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use super::human_grant::ApprovalScope;
 use uuid::Uuid;
 
 fn approval_lock_timeout() -> Duration {
@@ -62,6 +63,88 @@ fn approval_lock_timeout() -> Duration {
         .and_then(|value| value.parse().ok())
         .map(Duration::from_secs)
         .unwrap_or(Duration::from_secs(10))
+}
+
+/// Signs that something here may still take locks under the older directory
+/// protocol: the lock library every such Yana install carried, or a lock or
+/// maintenance gate already present. Then activating is a person's job
+/// (`core/scripts/migrate-locking-protocol-v1.py`).
+const OTHER_LOCK_USERS: &[&str] = &[
+    "core/lib/locking.sh",
+    ".claude/lib/locking.sh",
+    ".codex/lib/locking.sh",
+    ".cursor/lib/locking.sh",
+    yana_rt::flock_v1::MAINTENANCE_FILE,
+];
+
+/// Only a clear "not found" counts as absent: an unreadable path is left alone.
+fn may_exist(path: &Path) -> bool {
+    !matches!(path.symlink_metadata(), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+}
+
+fn is_link(path: &Path) -> bool {
+    path.symlink_metadata().is_ok_and(|meta| meta.file_type().is_symlink())
+}
+
+fn holds_locks(root: &Path) -> bool {
+    match std::fs::read_dir(root.join(yana_rt::flock_v1::LOCK_ROOT)) {
+        Ok(mut found) => found.next().is_some(),
+        Err(error) => error.kind() != std::io::ErrorKind::NotFound,
+    }
+}
+
+/// An approval cannot be saved without the flock-v1 marker, which only a Yana
+/// install wrote. Where nothing else takes these locks it is written here. What
+/// exists is never rewritten, and nothing is written through a symlink.
+fn prepare_locking(root: &Path) -> Result<()> {
+    let marker = root.join(yana_rt::flock_v1::PROTOCOL_FILE);
+    // Order matters: another asker may be writing the marker and then locks right now.
+    if holds_locks(root) || may_exist(&marker) {
+        return Ok(());
+    }
+    if is_link(&root.join(".claude"))
+        || is_link(&root.join(".claude/state"))
+        || OTHER_LOCK_USERS.iter().any(|path| may_exist(&root.join(path)))
+    {
+        return Ok(());
+    }
+    publish_marker(&marker)
+}
+
+/// The marker appears whole or not at all: written aside, then linked into place.
+fn publish_marker(marker: &Path) -> Result<()> {
+    let content = format!("{}\n", yana_rt::flock_v1::PROTOCOL_VERSION);
+    if let Some(parent) = marker.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let temporary = marker.with_extension(format!("tmp.{}", Uuid::new_v4().simple()));
+    if let Err(error) = write_new(&temporary, content.as_bytes()) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error.into());
+    }
+    let linked = fs::hard_link(&temporary, marker);
+    let _ = fs::remove_file(&temporary);
+    match linked {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        // A drive without hard links (exFAT, some network shares).
+        Err(_) => match write_new(marker, content.as_bytes()) {
+            Err(error) if error.kind() != std::io::ErrorKind::AlreadyExists => {
+                let _ = fs::remove_file(marker);
+                Err(error.into())
+            }
+            _ => Ok(()),
+        },
+    }
+}
+
+/// A file that did not exist before; never one reached through a link.
+fn write_new(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    std::io::Write::write_all(&mut options.open(path)?, bytes)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,30 +205,27 @@ fn read_approvals(root: &Path) -> Result<Vec<PendingApproval>> {
 fn write_approvals(root: &Path, approvals: &[PendingApproval]) -> Result<()> {
     let path = approvals_path(root);
     let parent = path.parent().expect("pending-approval store path has parent");
+    if is_link(parent) {
+        bail!("refusing to write approvals through a symlinked folder: {}", parent.display());
+    }
     fs::create_dir_all(parent).with_context(|| {
         format!(
             "cannot create pending-approval store directory {}",
             parent.display()
         )
     })?;
-    let temporary = path.with_extension(format!("json.tmp.{}", std::process::id()));
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    options.mode(0o600);
-    {
-        let mut file = options.open(&temporary).with_context(|| {
-            format!(
-                "cannot write temporary pending-approval store {}",
-                temporary.display()
-            )
-        })?;
-        use std::io::Write;
-        file.write_all(&serde_json::to_vec_pretty(approvals)?)
-            .with_context(|| format!("cannot write pending-approval store {}", temporary.display()))?;
+    // A name nobody can plant ahead of time, and a file that must be new.
+    let temporary = path.with_extension(format!("json.tmp.{}", Uuid::new_v4().simple()));
+    let written = write_new(&temporary, &serde_json::to_vec_pretty(approvals)?)
+        .with_context(|| format!("cannot write temporary pending-approval store {}", temporary.display()))
+        .and_then(|()| {
+            fs::rename(&temporary, &path)
+                .with_context(|| format!("cannot replace pending-approval store {}", path.display()))
+        });
+    if written.is_err() {
+        let _ = fs::remove_file(&temporary);
     }
-    fs::rename(&temporary, &path)
-        .with_context(|| format!("cannot replace pending-approval store {}", path.display()))
+    written
 }
 
 pub(crate) struct PendingApprovalStore {
@@ -160,6 +240,7 @@ impl PendingApprovalStore {
     }
 
     fn with_locked<T>(&self, action: impl FnOnce() -> Result<T>) -> Result<T> {
+        prepare_locking(&self.root).context("could not prepare the folder for approvals")?;
         let locked = yana_rt::flock_v1::with_lock(
             "key:pending-approvals",
             &self.root,
@@ -403,12 +484,38 @@ fn run_command_summary(call: &ToolCall) -> Result<String, crate::capability::Cap
 /// the key variable name, and `resume_turn` can tell if they changed. A web
 /// search that cannot be disclosed is an error: it must not be paused for a
 /// human to approve blind.
+const NOT_ISOLATED: &str = "not isolated: runs in this folder with your account's full rights";
+
+/// Whether `reason`, as the approver saw it, ends with what `call` would do now.
+/// A command must also have been shown with the isolation warning.
+fn shown_command_matches(root: &Path, call: &ToolCall, reason: &str) -> bool {
+    // The summary is appended last, after " | ", when the reason is built: it must be the end
+    // of it AND start right after that separator, so text inside an earlier part of the reason
+    // cannot stand in for it.
+    let Ok(Some(summary)) = disclosure_summary(root, call) else { return false };
+    if call.name == "run_command" && !crate::capability::COMMANDS_ARE_ISOLATED {
+        return reason.ends_with(&format!(" | {NOT_ISOLATED} | {summary}"));
+    }
+    reason.ends_with(&format!(" | {summary}"))
+}
+
+/// An answer is remembered only for a call the approver actually saw as it would now run.
+pub(crate) fn scope_to_remember(approval: &PendingApproval, asked: ApprovalScope) -> ApprovalScope {
+    if disclosure_changed(approval).is_some() {
+        return ApprovalScope::Once;
+    }
+    asked
+}
+
 pub(crate) fn reason_with_disclosure(
     root: &Path,
     call: &ToolCall,
     base: Option<String>,
 ) -> Result<String, crate::capability::CapabilityError> {
-    let base = base.unwrap_or_else(|| "requires explicit human approval".to_string());
+    let mut base = base.unwrap_or_else(|| "requires explicit human approval".to_string());
+    if call.name == "run_command" && !crate::capability::COMMANDS_ARE_ISOLATED {
+        base = format!("{base} | {NOT_ISOLATED}");
+    }
     Ok(match disclosure_summary(root, call)? {
         Some(summary) => format!("{base} | {summary}"),
         None => base,
@@ -421,18 +528,14 @@ fn disclosure_changed(approval: &PendingApproval) -> Option<ToolResultRecord> {
     if !matches!(approval.pending_call.name.as_str(), "web_search" | "mcp_call" | "lsp_query" | "run_command") {
         return None;
     }
-    let now = disclosure_summary(&approval.context.session.repo_root, &approval.pending_call);
-    // The summary is appended last, after " | ", when the reason is built: it must be the end
-    // of it AND start right after that separator, so text inside an earlier part of the reason
-    // cannot stand in for it.
-    let unchanged = matches!(&now, Ok(Some(summary)) if approval.authority_reason.ends_with(&format!(" | {summary}")));
-    if unchanged {
+    let root = &approval.context.session.repo_root;
+    if shown_command_matches(root, &approval.pending_call, &approval.authority_reason) {
         return None;
     }
     Some(ToolResultRecord {
         call_id: approval.pending_call.id.clone(),
         output: if approval.pending_call.name == "run_command" {
-            "blocked: the command shown to the approver is not the stored call; ask again".to_string()
+            "blocked: what the approver saw is not the stored call, or lacked the isolation warning; ask again".to_string()
         } else { "blocked: the search backend, MCP server or language server configuration changed since this was approved (or the question is not the one approved, or this process has a different PATH from the one that created the approval); ask again from the process that created the approval".to_string() },
         is_error: true,
         denied: true,
@@ -525,6 +628,108 @@ mod tests {
     use crate::runtime::{TurnContext, TurnOrigin};
     use crate::session_context::SessionContext;
     use std::path::PathBuf;
+
+    #[test]
+    fn an_answer_given_without_the_isolation_warning_is_asked_again() {
+        let root = temp_root();
+        let call = command_record("git status --short");
+        let reason = reason_with_disclosure(&root, &call, Some("base".into())).unwrap();
+        let old_format = reason.replace(&format!(" | {NOT_ISOLATED}"), "");
+        assert_ne!(reason, old_format);
+        assert!(shown_command_matches(&root, &call, &reason));
+        assert!(!shown_command_matches(&root, &call, &old_format), "1.5.4 never showed the warning");
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_folder_with_no_yana_install_can_still_be_asked_for_approval() {
+        let root = tempfile::tempdir().unwrap();
+        assert!(prepare_locking(root.path()).is_ok());
+        let marker = root.path().join(yana_rt::flock_v1::PROTOCOL_FILE);
+        assert_eq!(std::fs::read_to_string(&marker).unwrap().trim(), yana_rt::flock_v1::PROTOCOL_VERSION);
+        prepare_locking(root.path()).unwrap();
+    }
+
+    #[test]
+    fn a_folder_that_may_use_other_locks_is_left_alone() {
+        for existing in ["core/lib/locking.sh", ".claude/lib/locking.sh", ".codex/lib/locking.sh",
+                         ".cursor/lib/locking.sh", ".claude/state/locks/old.lock", ".claude/state/locking-maintenance"] {
+            let root = tempfile::tempdir().unwrap();
+            std::fs::create_dir_all(root.path().join(existing)).unwrap();
+            prepare_locking(root.path()).unwrap();
+            assert!(!root.path().join(yana_rt::flock_v1::PROTOCOL_FILE).exists(), "{existing}");
+        }
+    }
+
+    #[test]
+    fn a_project_with_hooks_of_its_own_can_still_be_asked() {
+        let root = tempfile::tempdir().unwrap();
+        for hooks in [".claude/hooks", ".codex/hooks", "core/hooks"] {
+            std::fs::create_dir_all(root.path().join(hooks)).unwrap();
+        }
+        prepare_locking(root.path()).unwrap();
+        assert!(root.path().join(yana_rt::flock_v1::PROTOCOL_FILE).is_file());
+    }
+
+    #[test]
+    fn many_askers_at_once_all_see_a_whole_marker() {
+        let root = tempfile::tempdir().unwrap();
+        let askers: Vec<_> = (0..16)
+            .map(|_| {
+                let path = root.path().to_path_buf();
+                std::thread::spawn(move || {
+                    prepare_locking(&path).unwrap();
+                    yana_rt::flock_v1::protocol_is_active(&path).unwrap();
+                })
+            })
+            .collect();
+        askers.into_iter().for_each(|asker| asker.join().unwrap());
+        let state = std::fs::read_dir(root.path().join(".claude/state")).unwrap().count();
+        assert_eq!(state, 1, "no temporary marker is left behind");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_approval_folder_is_not_written_through() {
+        let root = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(elsewhere.path(), root.path().join(".yana-ai")).unwrap();
+        assert!(write_approvals(root.path(), &[]).is_err());
+        assert!(std::fs::read_dir(elsewhere.path()).unwrap().next().is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_planted_temporary_file_cannot_redirect_the_write() {
+        let root = tempfile::tempdir().unwrap();
+        let victim = root.path().join("victim");
+        std::fs::write(&victim, "untouched").unwrap();
+        std::fs::create_dir_all(root.path().join(".yana-ai")).unwrap();
+        let planted = format!(".yana-ai/pending-approvals.json.tmp.{}", std::process::id());
+        std::os::unix::fs::symlink(&victim, root.path().join(planted)).unwrap();
+        write_approvals(root.path(), &[]).unwrap();
+        assert_eq!(std::fs::read_to_string(&victim).unwrap(), "untouched");
+    }
+
+    #[test]
+    fn an_existing_marker_is_never_rewritten() {
+        let root = tempfile::tempdir().unwrap();
+        let marker = root.path().join(yana_rt::flock_v1::PROTOCOL_FILE);
+        std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        std::fs::write(&marker, "mkdir-v1\n").unwrap();
+        prepare_locking(root.path()).unwrap();
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "mkdir-v1\n");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_state_folder_is_not_written_through() {
+        let root = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(elsewhere.path(), root.path().join(".claude")).unwrap();
+        prepare_locking(root.path()).unwrap();
+        assert!(std::fs::read_dir(elsewhere.path()).unwrap().next().is_none());
+    }
 
     fn temp_root() -> PathBuf {
         let dir = std::env::temp_dir().join(format!("yana-pending-approval-test-{}", Uuid::new_v4()));
@@ -740,7 +945,8 @@ mod tests {
     fn a_remote_approver_sees_the_command_with_secret_looking_values_hidden() {
         let root = temp_root();
         let reason = reason_with_disclosure(&root, &command_record("cargo test --token abc123 -- --nocapture"), Some("base".into())).unwrap();
-        assert!(reason.starts_with("base | run command: `cargo test --token '[REDACTED]' -- --nocapture`"));
+        assert!(reason.starts_with("base | not isolated:"), "{reason}");
+        assert!(reason.contains(" | run command: `cargo test --token '[REDACTED]' -- --nocapture`"), "{reason}");
         assert!(reason.ends_with("(1 secret-looking value is hidden)") && !reason.contains("abc123"));
         let plain = reason_with_disclosure(&root, &command_record("git status --short"), None).unwrap();
         assert!(plain.ends_with("run command: `git status --short`"));
@@ -774,6 +980,7 @@ mod tests {
     fn resuming_is_refused_when_the_stored_reason_is_not_the_stored_command() {
         let root = temp_root();
         let reason = reason_with_disclosure(&root, &command_record("git status"), Some("needs approval".into())).unwrap();
+        assert!(reason.contains("not isolated"), "the approver is told the command runs unprotected: {reason}");
         let store = PendingApprovalStore::for_root(&root);
         let honest = store.create(context(&root), "m".into(), None, Vec::new(), 0, command_record("git status"), reason.clone(), 20).unwrap();
         assert!(disclosure_changed(&honest).is_none());
@@ -781,6 +988,9 @@ mod tests {
         let swapped = store.create(context(&root), "m".into(), None, Vec::new(), 0, command_record("git push --force"), reason, 20).unwrap();
         let refusal = disclosure_changed(&swapped).expect("a different stored command must be refused");
         assert!(refusal.denied && refusal.output.contains("not the stored call"), "{refusal:?}");
+        // "Always" on a call that will be refused must not be remembered either.
+        assert_eq!(scope_to_remember(&honest, ApprovalScope::Always), ApprovalScope::Always);
+        assert_eq!(scope_to_remember(&swapped, ApprovalScope::Always), ApprovalScope::Once);
         fs::remove_dir_all(&root).ok();
     }
 

@@ -11,8 +11,10 @@ fn project() -> tempfile::TempDir {
     root
 }
 
+// Isolation does not exist yet (`capability::COMMANDS_ARE_ISOLATED`); `true` here
+// keeps the box's own rules for commands (budget, races, parking) under test.
 fn run<'a>(root: &'a Path, command: &'a str) -> CallFacts<'a> {
-    CallFacts { capability: "command.execute", command: Some(command), path: None, root, sandboxed: false }
+    CallFacts { capability: "command.execute", command: Some(command), path: None, root, sandboxed: true }
 }
 
 fn edit<'a>(root: &'a Path, path: &'a str) -> CallFacts<'a> {

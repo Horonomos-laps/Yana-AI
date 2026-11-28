@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn a_raised_cap_enforces_up_to_it_and_shadows_the_rest() {
         let root = project();
-        let safe = run(root.path(), "cargo test", false);
+        let safe = run(root.path(), "cargo test", true);
         let sandbox_only = run(root.path(), "cargo run", true);
         // Enforced through level 4: the safe command is approved, the sandbox-only one is shadowed.
         let at_four = judge(ControlLevel::Sandboxed, ControlLevel::SafeCommands, &safe);

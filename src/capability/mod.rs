@@ -46,7 +46,7 @@ pub mod web_search;
 
 pub use archive::{extract_zip, inspect_zip};
 pub use archive_create::create_zip;
-pub use command::{execute_command, validate_command, CommandOutcome, ValidatedCommand};
+pub use command::{execute_command, validate_command, CommandOutcome, ValidatedCommand, COMMANDS_ARE_ISOLATED};
 pub use config_write::{apply_config_write, propose_config_write};
 pub use error::CapabilityError;
 pub use file_mutation::{apply_file_write, propose_file_write, FileMutationDiff, FileMutationKind};

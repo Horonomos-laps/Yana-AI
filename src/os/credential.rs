@@ -24,12 +24,18 @@ pub struct CredentialStatus {
     /// Credential Manager) has an entry for this provider's env var name
     /// — checked by presence only, the value is never read.
     pub native_secret_configured: bool,
+    /// The store did not answer the presence question, so the flag above is not
+    /// proof that there is no key.
+    pub native_secret_unknown: bool,
+    /// The key was removed with `credential remove` and none was saved since.
+    pub native_secret_removed: bool,
     pub configured: bool,
 }
 
 pub fn inventory() -> Vec<CredentialStatus> {
     use crate::os::platform::contract::SecretBackend;
     let secret_backend = crate::os::platform::secret_backend();
+    let removed = crate::os::key_store::recorded_removals();
     crate::model::catalog::provider_catalog()
         .into_iter()
         .map(|provider| {
@@ -37,10 +43,10 @@ pub fn inventory() -> Vec<CredentialStatus> {
                 .env_var
                 .as_deref()
                 .is_some_and(|name| std::env::var(name).is_ok_and(|value| !value.is_empty()));
-            let native_secret_configured = provider
-                .env_var
-                .as_deref()
-                .is_some_and(|name| secret_backend.has_entry(name).unwrap_or(false));
+            let presence = provider.env_var.as_deref().map(|name| secret_backend.has_entry(name));
+            let native_secret_configured = matches!(presence, Some(Ok(true)));
+            let native_secret_unknown = matches!(presence, Some(Err(_)));
+            let native_secret_removed = provider.env_var.as_deref().is_some_and(|name| removed.contains(name));
             let configured =
                 provider.env_var.is_none() || env_configured || native_secret_configured;
             CredentialStatus {
@@ -49,6 +55,8 @@ pub fn inventory() -> Vec<CredentialStatus> {
                 credential_required: provider.requires_key,
                 environment_variable: provider.env_var,
                 native_secret_configured,
+                native_secret_unknown,
+                native_secret_removed,
                 configured,
             }
         })

@@ -2,7 +2,8 @@
 //!
 //! This module owns only stdin/stdout framing. Inference and authority stay
 //! inside the canonical [`crate::runtime::TurnEngine`]. API keys travel in
-//! stdin JSON, never argv, so process listings cannot expose them.
+//! stdin JSON, never argv, so process listings cannot expose them. A request
+//! without one uses the key the person saved (`crate::os::key_store`).
 //!
 //! Authority Hardening item #5 (`ADR-015`): before this, `AwaitingApproval`
 //! was an unreachable `bail!()` here (confirmed by reading this file
@@ -19,8 +20,9 @@
 
 use crate::model::provider::{ChatMessage, ImageAttachment, Role};
 use crate::runtime::{
-    reason_with_disclosure, resume_turn, CancellationToken, PendingApprovalStore, RuntimeEvent,
-    TurnContext, TurnEngine, TurnOrigin, TurnOutcome, TurnRequest, YanaAuthorityChain,
+    grant_for_decision, project_code_warning, reason_with_disclosure, resume_turn, ApprovalScope,
+    CancellationToken, GrantOutcome, GrantRequest, PendingApprovalStore, RuntimeEvent, TurnContext,
+    TurnEngine, TurnOrigin, TurnOutcome, TurnRequest, YanaAuthorityChain,
 };
 use crate::session_context::SessionContext;
 use anyhow::{Context, Result};
@@ -172,7 +174,7 @@ pub(super) fn dispatch(provider_name: String, model: Option<String>) -> Result<(
         repo_root,
         provider.name(),
         model.clone(),
-        true,
+        crate::capability::COMMANDS_ARE_ISOLATED
     );
     let context = TurnContext::new(session.clone(), TurnOrigin::Desktop, true);
     let plan_mode = parse_mode(input.mode.as_deref())?;
@@ -182,7 +184,8 @@ pub(super) fn dispatch(provider_name: String, model: Option<String>) -> Result<(
     let tools = crate::chat::tools::catalog(&session);
     let tools = if plan_mode { crate::chat::tools::plan_mode_catalog(tools) } else { tools };
     let system = input.system.filter(|value| !value.is_empty());
-    let api_key = input.api_key.filter(|value| !value.is_empty());
+    // The request's key, else the one the person saved for this provider (os::key_store).
+    let api_key = crate::os::key_store::key_for_turn(&provider_name, input.api_key);
     let mut messages = history_messages;
     messages.push(ChatMessage::text(Role::User, input.task).with_images(images));
     let mut request = TurnRequest::new(context.clone(), model.clone(), messages).with_tools(tools);
@@ -193,9 +196,7 @@ pub(super) fn dispatch(provider_name: String, model: Option<String>) -> Result<(
         request = request.with_api_key(api_key);
     }
 
-    let executor = Arc::new(crate::chat::tui::tool_dispatch::ChatCapabilityExecutor::new(
-        session.sandboxed,
-    ).in_plan_mode(plan_mode));
+    let executor = Arc::new(crate::chat::tui::tool_dispatch::ChatCapabilityExecutor::new().in_plan_mode(plan_mode));
     let engine = TurnEngine::new(provider, Arc::new(YanaAuthorityChain), executor);
     let cancellation = CancellationToken::default();
     let mut output = io::BufWriter::new(io::stdout().lock());
@@ -242,7 +243,7 @@ pub(super) fn dispatch(provider_name: String, model: Option<String>) -> Result<(
                     reason,
                     30,
                 )
-                .context("cannot persist pending approval")?;
+                .map_err(|error| anyhow::anyhow!("cannot persist pending approval: {error:#}"))?;
             write_json_line(
                 &mut output,
                 &json!({
@@ -254,6 +255,25 @@ pub(super) fn dispatch(provider_name: String, model: Option<String>) -> Result<(
                 }),
             )?;
         }
+    }
+    Ok(())
+}
+
+/// The approved call runs before the model is asked again, so a resume that has
+/// no key for that request stops here, with the approval still unused.
+fn check_key_for_resume(provider: &str, needs_key: bool, has_key: bool) -> Result<()> {
+    if needs_key && !has_key {
+        anyhow::bail!("no API key for '{provider}', so nothing was run and the approval is still waiting; add the key and try again");
+    }
+    Ok(())
+}
+
+/// A paused conversation continues only with the provider it was paused on.
+/// Otherwise a conversation held with a local model could be sent to a cloud
+/// provider, whose stored key would let it through.
+fn check_same_provider(paused: &str, resumed: &str) -> Result<()> {
+    if paused != resumed {
+        anyhow::bail!("this turn was paused on provider '{paused}'; resume it with --provider {paused}, not '{resumed}'");
     }
     Ok(())
 }
@@ -274,9 +294,30 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
     }
     let provider = wiring.provider;
     let store = PendingApprovalStore::for_root(&repo_root);
+    // Both before the approval is used up: a resume that cannot go ahead can be tried again.
+    let paused = store.get(&input.approval_id).context("cannot resolve pending approval")?;
+    check_same_provider(&paused.context.session.provider_name, provider.name())?;
+    let api_key = crate::os::key_store::key_for_turn(&provider_name, input.api_key);
+    let pooled = std::env::var_os(format!("{}_POOL", provider.env_var())).is_some();
+    check_key_for_resume(provider.name(), provider.requires_key() && !pooled, api_key.is_some())?;
     let resolved = store
-        .resolve(&input.approval_id, input.decision, input.decided_by)
+        .resolve(&input.approval_id, input.decision, input.decided_by.clone())
         .context("cannot resolve pending approval")?;
+    // Remembering the answer never blocks the turn: the person's decision for
+    // this one call is already recorded above and stands either way.
+    // Granted under the paused session's own root, the same value
+    // `capability_decision` matches leases against, not the process's cwd.
+    let grant = grant_for_decision(&GrantRequest {
+        root: &resolved.context.session.repo_root,
+        session_id: &resolved.context.session.session_id,
+        call: &resolved.pending_call,
+        approved: input.decision,
+        decided_by: &input.decided_by,
+        scope: crate::runtime::scope_to_remember(&resolved, input.scope),
+    });
+    let warning = project_code_warning(&resolved.pending_call);
+    announce_grant(&grant, warning);
+    let grant_event = grant_event(&grant, warning);
 
     let session = SessionContext::new(
         resolved.context.session.session_id.clone(),
@@ -291,11 +332,14 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
     }
     // Bound to the configuration as it is now, before the turn resumes (see the method's doc).
     let executor = Arc::new(
-        crate::chat::tui::tool_dispatch::ChatCapabilityExecutor::new(session.sandboxed)
+        crate::chat::tui::tool_dispatch::ChatCapabilityExecutor::new()
             .bound_to_current_configuration(&resolved.pending_call, &resolved.context.session.repo_root, &resolved.authority_reason),
     );
     let cancellation = CancellationToken::default();
     let mut output = io::BufWriter::new(io::stdout().lock());
+    if let Some(event) = &grant_event {
+        write_json_line(&mut output, event)?;
+    }
     let mut approval_reason: Option<String> = None;
     let mut event_context = EventContext::new(&resolved.context.session.repo_root)
         .with_known_call(&resolved.pending_call.id, &resolved.pending_call.name);
@@ -304,7 +348,7 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
         provider,
         executor,
         tools,
-        input.api_key.filter(|value| !value.is_empty()),
+        api_key,
         &cancellation,
         &mut |event| {
             if let RuntimeEvent::HumanApprovalRequired { authority, reason, .. } = &event {
@@ -352,7 +396,7 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
                     reason,
                     30,
                 )
-                .context("cannot persist pending approval")?;
+                .map_err(|error| anyhow::anyhow!("cannot persist pending approval: {error:#}"))?;
             write_json_line(
                 &mut output,
                 &json!({
@@ -374,6 +418,11 @@ struct HeadlessResumeInput {
     approval_id: String,
     decision: bool,
     decided_by: String,
+    /// How long an approval is remembered: "once" (the default), "session"
+    /// or "always". A scope other than "once" only makes sense with an
+    /// approval, so it is refused alongside a denial.
+    #[serde(default)]
+    scope: ApprovalScope,
     #[serde(default)]
     api_key: Option<String>,
 }
@@ -388,13 +437,20 @@ fn read_resume_input() -> Result<HeadlessResumeInput> {
     if bytes.len() as u64 > MAX_INPUT_BYTES {
         anyhow::bail!("headless resume input exceeds 10 MiB")
     }
+    parse_resume_input(&bytes)
+}
+
+fn parse_resume_input(bytes: &[u8]) -> Result<HeadlessResumeInput> {
     let input: HeadlessResumeInput =
-        serde_json::from_slice(&bytes).context("invalid headless resume JSON")?;
+        serde_json::from_slice(bytes).context("invalid headless resume JSON")?;
     if input.approval_id.trim().is_empty() {
         anyhow::bail!("headless resume approval_id must not be empty")
     }
     if input.decided_by.trim().is_empty() {
         anyhow::bail!("headless resume decided_by must not be empty")
+    }
+    if input.scope != ApprovalScope::Once && !input.decision {
+        anyhow::bail!("headless resume scope must be \"once\" when the decision is a denial")
     }
     Ok(input)
 }
@@ -717,6 +773,47 @@ fn write_event_with(output: &mut impl Write, event: RuntimeEvent, context: &mut 
     Ok(())
 }
 
+/// What was done with a request to remember an answer, for a person at a
+/// terminal. Remembering never blocks the turn, so this is only information.
+fn announce_grant(grant: &GrantOutcome, warning: Option<&str>) {
+    match grant {
+        GrantOutcome::NotRequested => {}
+        GrantOutcome::Granted(lease) => {
+            eprintln!(
+                "[chat/headless] remembered this answer as lease {} until {} (revoke: yana-rt lease revoke {})",
+                lease.id, lease.expires_at, lease.id
+            );
+            if let Some(warning) = warning {
+                eprintln!("[chat/headless] note: {warning}");
+            }
+        }
+        GrantOutcome::Declined(reason) => {
+            eprintln!("[chat/headless] approved this call only; not remembered: {reason}")
+        }
+    }
+}
+
+/// The same information as a protocol event, so a screen can tell the person
+/// whether the answer was remembered. A client that does not know this event
+/// type ignores it. `None` when nothing was asked for.
+fn grant_event(grant: &GrantOutcome, warning: Option<&str>) -> Option<serde_json::Value> {
+    match grant {
+        GrantOutcome::NotRequested => None,
+        GrantOutcome::Granted(lease) => Some(json!({
+            "type": "grant_outcome",
+            "remembered": true,
+            "lease_id": lease.id,
+            "expires_at": lease.expires_at.to_rfc3339(),
+            "warning": warning,
+        })),
+        GrantOutcome::Declined(reason) => Some(json!({
+            "type": "grant_outcome",
+            "remembered": false,
+            "reason": reason,
+        })),
+    }
+}
+
 fn write_json_line(output: &mut impl Write, value: &serde_json::Value) -> Result<()> {
     serde_json::to_writer(&mut *output, value)?;
     output.write_all(b"\n")?;
@@ -728,6 +825,88 @@ fn write_json_line(output: &mut impl Write, value: &serde_json::Value) -> Result
 mod tests {
     use super::*;
 
+    fn resume(json: &str) -> Result<HeadlessResumeInput> {
+        parse_resume_input(json.as_bytes())
+    }
+
+    fn a_lease() -> crate::capability::lease::Lease {
+        let now = chrono::Utc::now();
+        crate::capability::lease::Lease {
+            id: "ab12cd34".into(),
+            subject: "human-grant:workspace".into(),
+            capability: "command.execute".into(),
+            repo_root: PathBuf::from("/p"),
+            allow: vec!["exact:cargo test".into()],
+            deny: vec![],
+            issued_by: "human:anh".into(),
+            issued_at: now,
+            expires_at: now + chrono::Duration::days(90),
+            invocation_budget: None,
+            remaining: None,
+            revoked: false,
+            parent_lease_id: None,
+        }
+    }
+
+    #[test]
+    fn a_remembered_answer_is_announced_with_its_lease_and_any_warning() {
+        let granted = GrantOutcome::Granted(Box::new(a_lease()));
+        let event = grant_event(&granted, Some("runs project code")).unwrap();
+        assert_eq!(event["type"], "grant_outcome");
+        assert_eq!(event["remembered"], true);
+        assert_eq!(event["lease_id"], "ab12cd34");
+        assert_eq!(event["warning"], "runs project code");
+        assert!(event["expires_at"].as_str().is_some_and(|text| text.contains('T')));
+        assert!(grant_event(&granted, None).unwrap()["warning"].is_null());
+    }
+
+    #[test]
+    fn a_refused_request_to_remember_says_why_and_a_plain_answer_says_nothing() {
+        let declined = GrantOutcome::Declined("'bash' runs whatever it is given".into());
+        let event = grant_event(&declined, None).unwrap();
+        assert_eq!((event["remembered"].as_bool(), event["reason"].as_str()), (Some(false), Some("'bash' runs whatever it is given")));
+        assert!(event.get("lease_id").is_none());
+        assert!(grant_event(&GrantOutcome::NotRequested, Some("ignored")).is_none());
+    }
+
+    #[test]
+    fn a_resume_without_a_scope_is_the_old_once_only_behavior() {
+        let input = resume(r#"{"approval_id":"a1","decision":true,"decided_by":"human:anh"}"#).unwrap();
+        assert_eq!(input.scope, ApprovalScope::Once);
+    }
+
+    #[test]
+    fn a_resume_reads_session_and_always_with_an_approval() {
+        for (word, scope) in [("session", ApprovalScope::Session), ("always", ApprovalScope::Always)] {
+            let json = format!(r#"{{"approval_id":"a1","decision":true,"decided_by":"h","scope":"{word}"}}"#);
+            assert_eq!(resume(&json).unwrap().scope, scope);
+        }
+    }
+
+    #[test]
+    fn a_resume_refuses_a_remembered_scope_alongside_a_denial() {
+        for word in ["session", "always"] {
+            let json = format!(r#"{{"approval_id":"a1","decision":false,"decided_by":"h","scope":"{word}"}}"#);
+            assert!(resume(&json).is_err(), "{word} with a denial must be refused");
+        }
+        assert!(resume(r#"{"approval_id":"a1","decision":false,"decided_by":"h","scope":"once"}"#).is_ok());
+    }
+
+    #[test]
+    fn a_resume_refuses_an_unknown_scope_a_wrong_type_and_extra_fields() {
+        for body in [
+            r#"{"approval_id":"a1","decision":true,"decided_by":"h","scope":"forever"}"#,
+            r#"{"approval_id":"a1","decision":true,"decided_by":"h","scope":""}"#,
+            r#"{"approval_id":"a1","decision":true,"decided_by":"h","scope":1}"#,
+            r#"{"approval_id":"a1","decision":true,"decided_by":"h","scope":null}"#,
+            r#"{"approval_id":"a1","decision":true,"decided_by":"h","grant":"always"}"#,
+            r#"{"approval_id":"","decision":true,"decided_by":"h"}"#,
+            "",
+        ] {
+            assert!(resume(body).is_err(), "{body:?} must be refused");
+        }
+    }
+
     // `Arc<dyn ChatProvider>` isn't `Debug`, so `.unwrap_err()` (which
     // requires the Ok-type to be Debug, for its own panic message) can't
     // be used on a `Result<Arc<dyn ChatProvider>, _>` here — match
@@ -736,6 +915,21 @@ mod tests {
         match result {
             Err(error) => error,
             Ok(_) => panic!("expected an error, got Ok"),
+        }
+    }
+
+    #[test]
+    fn a_resume_without_a_key_stops_before_the_approval_is_used() {
+        assert!(check_key_for_resume("openai", true, false).is_err());
+        assert!(check_key_for_resume("openai", true, true).is_ok());
+        assert!(check_key_for_resume("ollama", false, false).is_ok());
+    }
+
+    #[test]
+    fn a_paused_turn_cannot_move_to_another_provider() {
+        assert!(check_same_provider("ollama", "ollama").is_ok());
+        for other in ["openai", "", "Ollama", "ollama "] {
+            assert!(check_same_provider("ollama", other).is_err(), "{other:?}");
         }
     }
 
@@ -1125,7 +1319,8 @@ mod tests {
         use crate::session_context::SessionContext;
         use std::path::PathBuf;
 
-        let session = SessionContext::new("s1", PathBuf::from("/tmp/repo"), "anthropic", "m", true);
+        let session = SessionContext::new("s1", PathBuf::from("/tmp/repo"), "anthropic", "m",
+        crate::capability::COMMANDS_ARE_ISOLATED);
         let mut output = Vec::new();
         // TurnStarted, MessageStarted, TurnResumed, MessageCompleted: none
         // of these are classified as Activity-relevant (see write_event's

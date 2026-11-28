@@ -8,6 +8,89 @@ All notable changes to Yana AI release packs are documented here.
 
 ---
 
+## Unreleased: approved commands run, and say they are not isolated
+
+- An approved command runs directly in the working folder, with the rights of
+  your account, its environment and network access. The approval says it is not
+  isolated. The folder's `core/scripts/sandbox-exec.sh` is no longer run, so the
+  folder cannot replace what an approval runs, and folders without that file no
+  longer fail with exit status 127.
+- On macOS and Linux a program named without a path is looked up only in `PATH`
+  directories outside the working folder. A tool installed inside the project
+  (`node_modules/.bin`, `.venv/bin`) must be named with its path.
+- There is no time limit on a command any more, and a running command cannot be
+  cancelled from the terminal chat. `--no-sandbox` is accepted by interactive
+  chat and does nothing. On Windows, commands no longer go through `bash`, so a
+  `.cmd` shim such as `npm` must be named in full.
+- In the away mode no command runs on its own, including `cargo test`,
+  `git status` and commands answered "always": each one waits for you. Levels 3
+  to 5 still edit ordinary project files while you are away. When you are
+  present, remembered answers and leases work as before, now without isolation.
+- An approval paused by an earlier version is refused for commands; ask again.
+- A folder without a Yana lock library can pause for approval, which creates
+  `.claude/state/` there. Where a library is found, activate with
+  `migrate-locking-protocol-v1.py` (in `.claude/scripts/` of an installed
+  project) with `--project-root` and `--enter-maintenance`, then `--activate`,
+  then `--leave-maintenance`; macOS and Linux only.
+- The approval store is no longer written through a symlinked `.yana-ai` folder
+  or a planted temporary file.
+
+---
+
+## Unreleased: provider keys saved once
+
+- `yana-rt os credential set --if-absent <provider>` leaves an existing key
+  alone (exit 3). `os credential status --json` also reports
+  `native_secret_unknown` and `native_secret_removed`.
+- MiniMax uses `api.minimax.io`; the default models of Cerebras and Cohere are
+  now `gpt-oss-120b` and `command-a-03-2025`.
+- `yana-rt os credential set|remove <provider>` keeps an API key in the macOS
+  Keychain; the headless chat protocol uses it when a request carries none, so
+  Yana apps can share one saved key. `os credential models` returns a
+  provider's model list fetched with that key. The terminal chat still reads environment
+  variables. `custom` and `9router` take no stored key. macOS only. Set
+  `YANA_NO_KEY_STORE` to stop chat turns and model listing from reading stored
+  keys.
+- Resuming an approval now requires the provider the turn was paused on, and a
+  key for it; without one nothing runs and the approval stays usable.
+- Cloud chat requests no longer follow redirects.
+- Control levels no longer approve `security`, `yana-rt os`, `yana-rt chat` or
+  `find -exec` by themselves, and MCP and LSP servers are marked as started by
+  the agent.
+
+---
+
+## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.5: remembered approvals, control levels, away mode (2026-11-19)
+
+Update with `cargo install yana-rt` and `pip install -U yana-ai`. The Yana app
+shows the new controls only with a `yana-rt` of 1.5.5 or newer.
+
+- **Remember an approval.** An approved command can be remembered for the
+  session or for the project. The grant is pinned to the exact command text and
+  stored outside the repository, in the person's own trust store. Shells and
+  interpreters (`bash`, `python`, `node`) are never remembered. Headless resume
+  accepts `scope` and answers with a `grant_outcome` event.
+- **Control levels.** `yana-rt level get|set` with five levels. Levels 1 and 2
+  are enforced. Levels 3 to 5 only observe: they write what they would have
+  allowed to `.yana-ai/level-shadow.jsonl` and change nothing yet. The lists of
+  dangerous and safe commands behind them are a judgment, not yet checked
+  against real use.
+- **Away mode.** `yana-rt away start|status|stop|report`. For a bounded time and
+  number of actions, covered work continues without asking; anything dangerous
+  or outside the box is parked in a queue the person reads later, and the
+  agent is told it was parked.
+- **Fix: an allowed command now runs.** A command allowed by a lease, a
+  remembered answer or the away mode was reported as started and then refused,
+  because only the per-call approval path had an implementation for it. Leases
+  that already existed now really run commands and write files. MCP, LSP and web
+  search still do not run on an allow alone.
+- Known limits: an approved command that is not sandboxed can still write under
+  `$HOME`, so the trust store is not tamper-proof against it; `decided_by` and
+  `scope` come from unauthenticated stdin; a remembered command is pinned by its
+  text, not by what the program does.
+
+---
+
 ## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.4: fresh-clone lockout fix, authority checks, status snapshot, repository split (2026-11-16)
 
 All three axes ship 1.5.4 from the same commit. npm is not published.

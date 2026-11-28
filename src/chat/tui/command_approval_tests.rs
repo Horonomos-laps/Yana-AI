@@ -105,6 +105,20 @@ fn a_prompt_drawn_for_an_earlier_call_does_not_approve_a_later_one_even_with_the
 }
 
 #[test]
+fn on_a_narrow_terminal_an_approvable_command_is_on_screen_to_its_last_character() {
+    let (_k, root) = trusted_repo(serde_json::json!([]));
+    for width in [40, 44, 47, 48, 80] {
+        let mut app = app_in(&root);
+        app.prepare_pending_approval(run_command(&format!("echo {} ENDMARK", "a".repeat(60)), "narrow"));
+        let screen = screen_of(&mut app, width, 40);
+        if app.shown_whole_call.is_some() {
+            assert!(screen.contains("ENDMARK"), "width {width}: approvable but cut off:\n{screen}");
+        }
+        assert!(screen.contains("not isolated"), "width {width}:\n{screen}");
+    }
+}
+
+#[test]
 fn a_command_cannot_fake_extra_prompt_lines_with_line_breaks_or_invisible_characters() {
     let (_k, root) = trusted_repo(serde_json::json!([]));
     let mut app = app_in(&root);

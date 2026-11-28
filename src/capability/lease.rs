@@ -27,6 +27,7 @@
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -81,8 +82,13 @@ fn leases_path(root: &Path) -> PathBuf {
 /// (that would either strand an operator's real leases or, worse, make an
 /// authority check believe leases are exhausted when the file just failed
 /// to parse).
+#[cfg(test)]
 fn read_leases(root: &Path) -> Result<Vec<Lease>> {
-    let path = leases_path(root);
+    read_leases_at(&leases_path(root))
+}
+
+fn read_leases_at(path: &Path) -> Result<Vec<Lease>> {
+    let path = path.to_path_buf();
     let metadata = match fs::symlink_metadata(&path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -100,8 +106,13 @@ fn read_leases(root: &Path) -> Result<Vec<Lease>> {
     Ok(leases)
 }
 
+#[cfg(test)]
 fn write_leases(root: &Path, leases: &[Lease]) -> Result<()> {
-    let path = leases_path(root);
+    write_leases_at(&leases_path(root), leases)
+}
+
+fn write_leases_at(path: &Path, leases: &[Lease]) -> Result<()> {
+    let path = path.to_path_buf();
     let parent = path.parent().expect("lease store path has parent");
     fs::create_dir_all(parent)
         .with_context(|| format!("cannot create lease store directory {}", parent.display()))?;
@@ -147,13 +158,115 @@ pub(crate) fn command_matches(entry: &str, command_text: &str) -> bool {
     command_tokens[..entry_tokens.len()] == entry_tokens[..]
 }
 
+/// Marks an `allow` entry as an exact-command grant. Kept inside the entry
+/// text instead of a new `Lease` field on purpose: a build that predates this
+/// marker reads `exact:git status` as a prefix entry whose first token is
+/// `exact:git`, which matches no real command, so a rollback loses the grant
+/// and never widens it. A new boolean field would be ignored by serde in the
+/// older build and silently turn the grant into a prefix match.
+const EXACT_PREFIX: &str = "exact:";
+
+/// Subjects of leases that record a person's own answer. Reserved: callers
+/// choose their own `agent_id` (`--subject`, `YANA_MCP_SUBJECT`,
+/// `for_subagent`), so without this a caller could name itself after a
+/// person's grant and spend it.
+pub(crate) const HUMAN_GRANT_SUBJECT_PREFIX: &str = "human-grant:";
+
+pub(crate) fn is_human_grant_subject(subject: &str) -> bool {
+    subject.trim().starts_with(HUMAN_GRANT_SUBJECT_PREFIX)
+}
+
+/// Longest command a human grant may record. A grant that long is almost
+/// certainly pasted text, not something to approve once and remember.
+pub(crate) const MAX_EXACT_COMMAND_CHARS: usize = 4096;
+
+/// Token-for-token equality. Uses the same tokenizer as `command_matches`
+/// and real command execution; `git status && rm -rf x` tokenizes to more
+/// tokens than `git status`, so it can never be equal. Fails closed on
+/// anything that does not tokenize.
+fn command_matches_exactly(entry: &str, command_text: &str) -> bool {
+    let (Ok(entry_tokens), Ok(command_tokens)) = (
+        super::command::tokenize_command(entry),
+        super::command::tokenize_command(command_text),
+    ) else {
+        return false;
+    };
+    !entry_tokens.is_empty() && entry_tokens == command_tokens
+}
+
+/// One `allow` entry against one command: exact when marked, prefix otherwise.
+fn allow_entry_matches(entry: &str, command_text: &str) -> bool {
+    match entry.strip_prefix(EXACT_PREFIX) {
+        Some(command) => command_matches_exactly(command, command_text),
+        None => command_matches(entry, command_text),
+    }
+}
+
 pub struct LeaseStore {
     root: PathBuf,
+    /// The JSON file this store reads and writes. `.yana-ai/leases.json` in
+    /// the repository for `for_root`; a file outside it for `for_human_grants`.
+    file: PathBuf,
+}
+
+/// Where a person's remembered answers are kept: next to `config_trust`'s
+/// records, `<trust store>/human-grants`. Tests get a private directory per
+/// test thread and never touch a real home.
+fn user_store_dir(subdirectory: &str) -> Result<PathBuf> {
+    #[cfg(test)]
+    {
+        Ok(super::config_trust::empty_store_in_test().join(subdirectory))
+    }
+    #[cfg(not(test))]
+    {
+        super::config_trust::store_dir()
+            .map(|dir| dir.join(subdirectory))
+            .map_err(|error| anyhow::anyhow!("{error}"))
+    }
+}
+
+/// The file, for this repository, in one of the person's own stores (next to
+/// `config_trust`'s records), refusing any location inside the repository: a
+/// file there could be rewritten by a command the person approved.
+pub(crate) fn user_store_file(root: &Path, subdirectory: &str) -> Result<PathBuf> {
+    let dir = user_store_dir(subdirectory)?;
+    let repo = root
+        .canonicalize()
+        .with_context(|| format!("cannot resolve repository {}", root.display()))?;
+    let mut existing = dir.as_path();
+    while !existing.exists() {
+        existing = existing
+            .parent()
+            .context("the person's store has no existing parent directory")?;
+    }
+    let resolved = existing
+        .canonicalize()
+        .with_context(|| format!("cannot resolve {}", existing.display()))?;
+    if resolved.starts_with(&repo) {
+        bail!("the person's store must be outside the repository");
+    }
+    let name: String = Sha256::digest(repo.to_string_lossy().as_bytes())
+        .iter()
+        .take(16)
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    Ok(dir.join(format!("{name}.json")))
 }
 
 impl LeaseStore {
     pub fn for_root(root: &Path) -> Self {
-        Self { root: root.to_path_buf() }
+        Self { root: root.to_path_buf(), file: leases_path(root) }
+    }
+
+    /// The store for answers a person gave ("for this session", "always").
+    ///
+    /// It lives OUTSIDE the repository on purpose. `leases.json` sits in the
+    /// project, where any command a person approves can rewrite it, and a
+    /// forged `human-grant:` lease there would cover every later turn of the
+    /// person. Refuses to hand out a store that resolves inside the repository
+    /// (same rule as `config_trust`).
+    pub(crate) fn for_human_grants(root: &Path) -> Result<Self> {
+        Ok(Self { root: root.to_path_buf(), file: user_store_file(root, "human-grants")? })
     }
 
     /// Runs `action` as one `flock-v1` critical section scoped to this
@@ -180,8 +293,38 @@ impl LeaseStore {
     /// prompt; each call needs a person's approval instead (contract section 17).
     const NEVER_LEASED: [&'static str; 1] = ["lsp.query"];
 
+    /// The general entry point (CLI, delegation). Refuses the reserved
+    /// `human-grant:` subjects: those mean "a person said yes", and only
+    /// `grant_exact` may issue them.
     #[allow(clippy::too_many_arguments)]
     pub fn grant(
+        &self,
+        subject: String,
+        capability: String,
+        allow: Vec<String>,
+        deny: Vec<String>,
+        issued_by: String,
+        expires_in_minutes: u64,
+        invocation_budget: Option<u32>,
+        parent_lease_id: Option<String>,
+    ) -> Result<Lease> {
+        if is_human_grant_subject(&subject) {
+            bail!("subjects starting with '{HUMAN_GRANT_SUBJECT_PREFIX}' are reserved for answers a person gave");
+        }
+        self.grant_unchecked(
+            subject,
+            capability,
+            allow,
+            deny,
+            issued_by,
+            expires_in_minutes,
+            invocation_budget,
+            parent_lease_id,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn grant_unchecked(
         &self,
         subject: String,
         capability: String,
@@ -205,7 +348,7 @@ impl LeaseStore {
             bail!("'{}' cannot be leased: every call needs a person's approval", capability.trim());
         }
         self.with_locked(|| {
-            let mut leases = read_leases(&self.root)?;
+            let mut leases = read_leases_at(&self.file)?;
             // Grant-time check (item #6): the parent must actually exist.
             // This is a fail-fast UX check, not the safety boundary itself
             // — the real `child ⊆ parent` invariant is enforced at every
@@ -237,20 +380,80 @@ impl LeaseStore {
                 parent_lease_id,
             };
             leases.push(lease.clone());
-            write_leases(&self.root, &leases)?;
+            write_leases_at(&self.file,&leases)?;
             Ok(lease)
+        })
+    }
+
+    /// Grants `subject` exactly one command, token for token: the shape a
+    /// human's "allow for this session / always" answer needs. Refuses
+    /// anything that is empty, longer than `MAX_EXACT_COMMAND_CHARS`, holds a
+    /// control character (NUL, CR, LF), or does not tokenize, so a refused
+    /// grant leaves nothing behind. Everything else (never-leasable
+    /// capabilities, the subject rules, locking) is `grant`'s own checks.
+    pub fn grant_exact(
+        &self,
+        subject: String,
+        capability: String,
+        command: &str,
+        issued_by: String,
+        expires_in_minutes: u64,
+    ) -> Result<Lease> {
+        if !is_human_grant_subject(&subject) {
+            bail!("an exact grant is issued to a '{HUMAN_GRANT_SUBJECT_PREFIX}' subject only");
+        }
+        let command = command.trim();
+        if command.is_empty() {
+            bail!("an exact grant needs a command");
+        }
+        if command.chars().count() > MAX_EXACT_COMMAND_CHARS {
+            bail!("an exact grant is limited to {MAX_EXACT_COMMAND_CHARS} characters");
+        }
+        if command.chars().any(char::is_control) {
+            bail!("an exact grant cannot hold control characters");
+        }
+        if !super::command::tokenize_command(command).is_ok_and(|tokens| !tokens.is_empty()) {
+            bail!("an exact grant command could not be parsed");
+        }
+        self.grant_unchecked(
+            subject,
+            capability,
+            vec![format!("{EXACT_PREFIX}{command}")],
+            Vec::new(),
+            issued_by,
+            expires_in_minutes,
+            None,
+            None,
+        )
+    }
+
+    /// A live (unrevoked, unexpired) grant that `grant_exact` already issued
+    /// for this very command, so answering the same question twice does not
+    /// pile up copies. Errors reading the store count as "none": the caller
+    /// then tries to grant, which fails closed on the same error.
+    pub fn find_live_exact(&self, subject: &str, capability: &str, command: &str) -> Option<Lease> {
+        let entry = format!("{EXACT_PREFIX}{}", command.trim());
+        let now = Utc::now();
+        self.list().ok()?.into_iter().find(|lease| {
+            lease.subject == subject
+                && lease.capability == capability
+                && !lease.revoked
+                && lease.expires_at > now
+                && lease.allow == [entry.clone()]
+                && lease.deny.is_empty()
+                && lease.parent_lease_id.is_none()
         })
     }
 
     pub fn revoke(&self, id: &str) -> Result<()> {
         let id = id.to_string();
         self.with_locked(|| {
-            let mut leases = read_leases(&self.root)?;
+            let mut leases = read_leases_at(&self.file)?;
             let Some(lease) = leases.iter_mut().find(|lease| lease.id == id) else {
                 bail!("no lease with id '{id}'");
             };
             lease.revoked = true;
-            write_leases(&self.root, &leases)
+            write_leases_at(&self.file,&leases)
         })
     }
 
@@ -259,7 +462,7 @@ impl LeaseStore {
         // file via a same-directory temp-file + rename, so a concurrent
         // reader only ever observes a complete old or complete new file,
         // never a torn write.
-        read_leases(&self.root)
+        read_leases_at(&self.file)
     }
 
     /// The one method `RuntimeAuthority::capability_decision` calls.
@@ -303,7 +506,7 @@ impl LeaseStore {
             return Ok(None);
         }
         self.with_locked(|| {
-            let mut leases = read_leases(&self.root)?;
+            let mut leases = read_leases_at(&self.file)?;
             let now = Utc::now();
             let Some(leaf_index) = leases.iter().position(|lease| {
                 !lease.revoked
@@ -326,7 +529,7 @@ impl LeaseStore {
                 }
             }
             let id = leases[leaf_index].id.clone();
-            write_leases(&self.root, &leases)?;
+            write_leases_at(&self.file,&leases)?;
             Ok(Some(id))
         })
     }
@@ -344,7 +547,7 @@ impl LeaseStore {
         repo_root: &Path,
         command_text: Option<&str>,
     ) -> Option<String> {
-        let leases = read_leases(&self.root).ok()?;
+        let leases = read_leases_at(&self.file).ok()?;
         let now = Utc::now();
         let mine: Vec<&Lease> = leases
             .iter()
@@ -393,7 +596,7 @@ fn lease_scope_allows(lease: &Lease, command_text: Option<&str>) -> bool {
     match command_text {
         Some(text) => {
             !lease.deny.iter().any(|entry| command_matches(entry, text))
-                && lease.allow.iter().any(|entry| command_matches(entry, text))
+                && lease.allow.iter().any(|entry| allow_entry_matches(entry, text))
         }
         None => true,
     }
@@ -493,7 +696,13 @@ pub fn cmd_lease_grant(
 
 pub fn cmd_lease_list(json: bool) -> Result<()> {
     let root = std::env::current_dir().context("cannot resolve project root")?;
-    let leases = LeaseStore::for_root(&root).list()?;
+    let mut leases = LeaseStore::for_root(&root).list()?;
+    // A person's remembered answers live in a store outside the repository.
+    // If it cannot be opened, say so instead of showing a list that looks complete.
+    match LeaseStore::for_human_grants(&root).and_then(|store| store.list()) {
+        Ok(remembered) => leases.extend(remembered),
+        Err(error) => eprintln!("[lease] could not read the answers a person remembered: {error:#}"),
+    }
     if json {
         println!("{}", serde_json::to_string_pretty(&leases)?);
         return Ok(());
@@ -523,7 +732,14 @@ pub fn cmd_lease_list(json: bool) -> Result<()> {
 
 pub fn cmd_lease_revoke(id: String, json: bool) -> Result<()> {
     let root = std::env::current_dir().context("cannot resolve project root")?;
-    LeaseStore::for_root(&root).revoke(&id)?;
+    // The id may belong to the project's store or to the store of a person's
+    // remembered answers; try the project's first, then the other.
+    if let Err(project_error) = LeaseStore::for_root(&root).revoke(&id) {
+        let remembered = LeaseStore::for_human_grants(&root).and_then(|store| store.revoke(&id));
+        if remembered.is_err() {
+            return Err(project_error);
+        }
+    }
     if json {
         println!("{}", serde_json::json!({ "revoked": id }));
     } else {
@@ -1276,5 +1492,178 @@ mod tests {
             "the bounded chain-depth walk must terminate quickly, not hang on a cycle"
         );
         fs::remove_dir_all(&root).ok();
+    }
+
+    fn consume(store: &LeaseStore, root: &Path, subject: &str, command: &str) -> bool {
+        store
+            .try_consume_matching(subject, "command.execute", root, Some(command))
+            .unwrap()
+            .is_some()
+    }
+
+    #[test]
+    fn exact_grant_matches_only_the_identical_command() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        store
+            .grant_exact(
+                "human-grant:s1".into(),
+                "command.execute".into(),
+                "git push origin main",
+                "human:anh".into(),
+                60,
+            )
+            .unwrap();
+
+        assert!(consume(&store, &root, "human-grant:s1", "git push origin main"));
+        assert!(
+            !consume(&store, &root, "human-grant:s1", "git push origin main --force"),
+            "an exact grant must not widen to the same command plus extra flags"
+        );
+        assert!(!consume(&store, &root, "human-grant:s1", "git push origin"));
+        assert!(!consume(&store, &root, "human-grant:other", "git push origin main"));
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn exact_grant_is_not_widened_by_shell_operators() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        store
+            .grant_exact("human-grant:s1".into(), "command.execute".into(), "git status", "human:anh".into(), 60)
+            .unwrap();
+
+        assert!(consume(&store, &root, "human-grant:s1", "git status"), "the grant itself must work");
+        for chained in ["git status && rm -rf x", "git status; rm -rf x", "git status | sh", "git status $(id)"] {
+            assert!(!consume(&store, &root, "human-grant:s1", chained), "{chained:?} must not match");
+        }
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn exact_grant_rejects_empty_oversized_and_control_character_commands() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        let oversized = "a".repeat(MAX_EXACT_COMMAND_CHARS + 1);
+        let max_length = "a".repeat(MAX_EXACT_COMMAND_CHARS);
+        for bad in ["", "   ", "git\0status", "git status\r\nrm -rf x", "git status\nrm x", oversized.as_str()] {
+            let result = store.grant_exact(
+                "human-grant:s1".into(),
+                "command.execute".into(),
+                bad,
+                "human:anh".into(),
+                60,
+            );
+            assert!(result.is_err(), "{:?} must be refused", bad.chars().take(20).collect::<String>());
+        }
+        assert!(store
+            .grant_exact("human-grant:s1".into(), "command.execute".into(), &max_length, "human:anh".into(), 60)
+            .is_ok());
+        assert_eq!(store.list().unwrap().len(), 1, "refused grants must leave nothing behind");
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn exact_grant_cannot_lease_a_never_leased_capability() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        let result = store.grant_exact("human-grant:s1".into(), "lsp.query".into(), "x", "human:anh".into(), 60);
+        assert!(result.is_err());
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn exact_entry_fails_closed_under_the_prefix_matcher_an_older_build_would_use() {
+        // A build that predates the `exact:` marker reads the entry as an
+        // ordinary prefix entry. Its first token is "exact:git", which no
+        // real command has, so a rollback can only lose the grant, never widen it.
+        assert!(!command_matches("exact:git status", "git status"));
+        assert!(!command_matches("exact:git status", "git status --porcelain"));
+    }
+
+    #[test]
+    fn the_general_grant_refuses_the_reserved_human_grant_subjects() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        for subject in ["human-grant:workspace", "human-grant:session:s1", "  human-grant:x"] {
+            let result = store.grant(
+                subject.into(),
+                "command.execute".into(),
+                vec!["cargo test".into()],
+                vec![],
+                "agent".into(),
+                60,
+                None,
+                None,
+            );
+            assert!(result.is_err(), "{subject:?} must be reserved");
+        }
+        assert!(store.list().unwrap().is_empty());
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_exact_grant_is_issued_to_human_grant_subjects_only() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        let result = store.grant_exact("agent:worker".into(), "command.execute".into(), "cargo test", "x".into(), 60);
+        assert!(result.is_err());
+        assert!(store.list().unwrap().is_empty());
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_exact_grant_stops_matching_when_it_expires_or_is_revoked() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        store
+            .grant_exact("human-grant:s1".into(), "command.execute".into(), "cargo test", "human:anh".into(), 0)
+            .unwrap();
+        assert!(!consume(&store, &root, "human-grant:s1", "cargo test"), "a zero-minute grant is already expired");
+
+        let live = store
+            .grant_exact("human-grant:s1".into(), "command.execute".into(), "cargo fmt", "human:anh".into(), 60)
+            .unwrap();
+        assert!(consume(&store, &root, "human-grant:s1", "cargo fmt"));
+        store.revoke(&live.id).unwrap();
+        assert!(!consume(&store, &root, "human-grant:s1", "cargo fmt"));
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn find_live_exact_ignores_expired_revoked_and_different_commands() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        let live = store
+            .grant_exact("human-grant:s1".into(), "command.execute".into(), "cargo test", "human:anh".into(), 60)
+            .unwrap();
+        assert_eq!(store.find_live_exact("human-grant:s1", "command.execute", " cargo test ").unwrap().id, live.id);
+        assert!(store.find_live_exact("human-grant:s1", "command.execute", "cargo test --release").is_none());
+        assert!(store.find_live_exact("human-grant:s2", "command.execute", "cargo test").is_none());
+        store.revoke(&live.id).unwrap();
+        assert!(store.find_live_exact("human-grant:s1", "command.execute", "cargo test").is_none());
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_store_for_remembered_answers_is_outside_the_repository() {
+        let root = temp_root();
+        let store = LeaseStore::for_human_grants(&root).unwrap();
+        assert!(!store.file.starts_with(&root), "{} must not be inside {}", store.file.display(), root.display());
+        assert_ne!(store.file, leases_path(&root));
+        // The project's own store and the person's store do not see each other's leases.
+        LeaseStore::for_root(&root)
+            .grant("agent:a".into(), "command.execute".into(), vec!["cargo test".into()], vec![], "h".into(), 60, None, None)
+            .unwrap();
+        assert!(store.list().unwrap().is_empty());
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_store_for_remembered_answers_refuses_a_location_inside_the_repository() {
+        // A repository that contains the store directory: use the store's own
+        // parent as the "repository".
+        let store_parent = super::super::config_trust::empty_store_in_test();
+        assert!(LeaseStore::for_human_grants(&store_parent).is_err());
     }
 }

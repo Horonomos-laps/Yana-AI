@@ -252,7 +252,7 @@ impl App {
         };
         let context = TurnContext::new(self.session_context(), TurnOrigin::Terminal, true);
         let call_id = call.id.clone();
-        let executor = ChatCapabilityExecutor::new(self.use_sandbox).with_approved_mcp(approved_mcp).with_approved_lsp(approved_lsp);
+        let executor = ChatCapabilityExecutor::new().with_approved_mcp(approved_mcp).with_approved_lsp(approved_lsp);
         let (tx, rx) = mpsc::channel::<ToolExecEvent>();
         thread::spawn(move || {
             let result = execute_approved_tool(

@@ -1,6 +1,6 @@
 [package]
 name = "yana-rt"
-version = "1.5.4"
+version = "1.5.5"
 edition = "2021"
 description = "Yana AI Runtime — safety CLI for AI agents: scan, graph, vault, hunt, ci, map, fix, doctor"
 license = "Apache-2.0"
@@ -55,6 +55,7 @@ cli = [
   "tree-sitter-javascript", "tree-sitter-python", "tree-sitter-go",
   "flock-v1",
   "session-db",
+  "security-framework",
 ]
 # Session database (WS4, docs/contracts/ws4-state.md section 4). Kept as its own
 # feature so a build without SQLite is still possible; it is part of `cli`.
@@ -105,7 +106,7 @@ ureq       = { version = "3", features = ["json"],   optional = true }
 # YAML. Replaces serde_yml 0.0.13, an unmaintained shim pinned to noyalib
 # 0.0.5 (RUSTSEC-2026-0333: resource budgets not enforced on typed
 # deserialization, fixed in 0.0.53).
-noyalib    = { version = "0.0.58",                   optional = true }
+noyalib    = { version = "0.0.62",                   optional = true }
 sha2       = { version = "0.10",                     optional = true }
 libc       = { version = "0.2",                      optional = true }
 url        = { version = "2",                        optional = true }
@@ -113,7 +114,7 @@ url        = { version = "2",                        optional = true }
 # default features off, so the optional statement cache and its `hashlink`
 # dependency stay out. `bundled` compiles SQLite from C source (libsqlite3-sys
 # uses the `cc` crate) instead of linking a system library.
-rusqlite   = { version = "=0.41.1", default-features = false, features = ["bundled"], optional = true }
+rusqlite   = { version = "=0.43.0", default-features = false, features = ["bundled"], optional = true }
 # TUI for `yana chat` — synchronous poll/read API only, deliberately not
 # opting into crossterm's `event-stream` feature (would pull in async/
 # futures plumbing this crate has nowhere else).
@@ -137,7 +138,7 @@ tree-sitter-go         = { version = "0.25.0",  optional = true }
 # release (`=3.6.0`), never a pre-release, per Phase 8 Design Review's own
 # finding: a beta dependency on a security-critical guard path is a real
 # risk, not a style preference. Bump it deliberately, together with Cargo.lock.
-rmcp  = { version = "=3.9.0", features = ["server", "transport-io", "client"], optional = true }
+rmcp  = { version = "=3.11.0", features = ["server", "transport-io", "client"], optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 
 # Discord remote adapter only (see `discord` feature above). Sync WebSocket
@@ -160,6 +161,11 @@ portable-pty = { version = "0.9", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys       = { version = "0.3", optional = true }
 zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
+
+# The shared provider key store (src/os/key_store.rs). Already in Cargo.lock
+# through the TLS stack; pinned to that exact release, so no new package.
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = { version = "=3.7.0", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

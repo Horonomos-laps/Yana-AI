@@ -59,7 +59,6 @@ fn app() -> App {
         Vec::new(),
         false,
         true,
-        true,
     );
     app.settings.autosave = false;
     app

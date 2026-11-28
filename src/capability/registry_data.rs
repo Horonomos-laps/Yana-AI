@@ -261,7 +261,7 @@ fn base_descriptors() -> Vec<CapabilityDescriptor> {
         CapabilityDescriptor {
             name: "command.execute",
             tool_name: "run_command",
-            description: "Execute a validated, guard-approved command's argv directly (or sandboxed). Requires explicit human approval in the terminal before it executes.",
+            description: "Execute a validated, guard-approved command's argv directly in the working folder, without isolation. Requires explicit human approval in the terminal before it executes.",
             access_mode: AccessMode::Mutating,
             risk_tier: RiskTier::High,
             approval: ApprovalRequirement::HumanApprovalPerCall,

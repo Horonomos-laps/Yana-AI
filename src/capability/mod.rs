@@ -25,6 +25,9 @@ pub mod harness;
 pub mod lease;
 pub mod lsp_config;
 pub mod lsp_disclosure;
+// Not called yet: the App Harness layer that runs external programs will call it.
+#[allow(dead_code)]
+pub mod output_verify;
 pub mod mcp_config;
 pub mod mcp_disclosure;
 pub mod patch;
@@ -43,7 +46,7 @@ pub mod web_search;
 
 pub use archive::{extract_zip, inspect_zip};
 pub use archive_create::create_zip;
-pub use command::{execute_command, validate_command, CommandOutcome, ValidatedCommand};
+pub use command::{execute_command, validate_command, CommandOutcome, ValidatedCommand, COMMANDS_ARE_ISOLATED};
 pub use config_write::{apply_config_write, propose_config_write};
 pub use error::CapabilityError;
 pub use file_mutation::{apply_file_write, propose_file_write, FileMutationDiff, FileMutationKind};

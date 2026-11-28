@@ -44,8 +44,15 @@ write `flock-v1` to the marker file. With the variable set, the bridge writes
 the marker once, atomically and without replacing an existing file, and says so
 on stderr, but only when there is no maintenance gate, no marker of any content,
 nothing but regular files under `locks/`, and `.claude` and `.claude/state` are
-real directories. Without it the bridge prints how to activate. The compiled
-runtime never writes the marker itself. Setting the variable on a live
+real directories. Without it the bridge prints how to activate.
+
+The compiled runtime writes the marker in one case: before saving a pending
+approval, when there is no marker, nothing under `locks/`, no maintenance gate,
+no lock library at `core/lib/locking.sh`, `.claude/lib/locking.sh`,
+`.codex/lib/locking.sh` or `.cursor/lib/locking.sh`, and neither `.claude` nor
+`.claude/state` is a link. An ordinary project has none of these and could not
+otherwise pause for approval. This is a heuristic: an idle `mkdir-v1` install
+that keeps its lock library elsewhere would be activated. Setting the variable on a live
 `mkdir-v1` install, idle or not, is an operator error that skips the cutover steps
 above; set it only in the environment settings of a disposable session, never in
 a committed `settings.json`.

@@ -1,5 +1,8 @@
+use super::away::AwayOutcome;
+use super::level::{CallFacts, ControlLevel, LevelVerdict};
+use super::level_shadow::{judge, record_shadow, MAX_ENFORCED_LEVEL};
 use super::TurnContext;
-use crate::capability::lease::LeaseStore;
+use crate::capability::lease::{is_human_grant_subject, LeaseStore};
 use crate::capability::{manifest, ApprovalRequirement};
 use crate::model::tool::ToolCall;
 
@@ -8,7 +11,7 @@ use crate::model::tool::ToolCall;
 /// not just by capability name. Returns `None` for every other capability,
 /// which makes a lease for them subject/capability/scope-only (no command
 /// text to match against).
-fn command_text_for_lease(call: &ToolCall) -> Option<String> {
+pub(super) fn command_text_for_lease(call: &ToolCall) -> Option<String> {
     #[derive(serde::Deserialize)]
     struct Args {
         command: Option<String>,
@@ -151,6 +154,75 @@ pub(crate) enum AuthorityDecision {
     },
 }
 
+/// An `Allow` that rests on a lease: narrowed by a declared intent, and
+/// recorded with the lease as its evidence only if it is still an `Allow`
+/// afterwards.
+fn allow_through_lease(
+    context: &TurnContext,
+    capability: &str,
+    command_text: Option<&str>,
+    lease_id: String,
+) -> AuthorityDecision {
+    let decision_id = uuid::Uuid::new_v4().to_string();
+    let decision = narrow_by_intent(
+        context,
+        capability,
+        command_text,
+        AuthorityDecision::Allow { decision_id: Some(decision_id.clone()) },
+    );
+    let evidence = matches!(decision, AuthorityDecision::Allow { .. }).then_some(lease_id);
+    super::receipt::record(&decision_id, context, capability, &decision, evidence);
+    decision
+}
+
+/// A call the away mode could not approve: neither run nor refused for good.
+/// It is a denial the model can read, written so that it carries on with other
+/// work, and the item waits in the queue for the person.
+fn parked_decision(context: &TurnContext, capability: &str, reason: &str) -> AuthorityDecision {
+    let decision_id = uuid::Uuid::new_v4().to_string();
+    let decision = AuthorityDecision::Deny {
+        authority: AuthorityLayer::YanaControlPlane,
+        reason: format!(
+            "parked for the person, who is away ({reason}). It waits in a queue they will see; do not try it again, and carry on with work that does not need it"
+        ),
+    };
+    super::receipt::record(&decision_id, context, capability, &decision, None);
+    decision
+}
+
+/// The `path` argument of a file write or patch, the one other thing a level
+/// needs to know about a call.
+fn path_for_level(call: &ToolCall) -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct Args {
+        path: Option<String>,
+    }
+    serde_json::from_str::<Args>(&call.arguments_json).ok().and_then(|args| args.path)
+}
+
+/// Applies the person's control level to a call that would otherwise ask.
+/// Enforced only up to `MAX_ENFORCED_LEVEL`; above it the level just writes
+/// down what it would have approved. A declared intent still narrows an
+/// approval a level gives (the caller applies it afterwards).
+fn apply_control_level(
+    level: Option<ControlLevel>,
+    facts: &CallFacts,
+    decision_id: &str,
+    decision: AuthorityDecision,
+) -> AuthorityDecision {
+    let (Some(level), AuthorityDecision::HumanApprovalRequired { .. }) = (level, &decision) else {
+        return decision;
+    };
+    let judged = judge(level, MAX_ENFORCED_LEVEL, facts);
+    if judged.enforced == LevelVerdict::Allow {
+        return AuthorityDecision::Allow { decision_id: Some(decision_id.to_string()) };
+    }
+    if judged.shadow_only {
+        record_shadow(facts.root, level, facts, decision_id);
+    }
+    decision
+}
+
 pub(crate) trait RuntimeAuthority: Send + Sync {
     fn preflight_turn(&self, context: &TurnContext) -> AuthorityDecision;
     fn authorize_tool(&self, context: &TurnContext, call: &ToolCall) -> AuthorityDecision;
@@ -225,6 +297,14 @@ impl YanaAuthorityChain {
         }
 
         let command_text = command_text_for_lease(call);
+        let path = path_for_level(call);
+        let facts = CallFacts {
+            capability: descriptor.name,
+            command: command_text.as_deref(),
+            path: path.as_deref(),
+            root: &context.session.repo_root,
+            sandboxed: crate::capability::COMMANDS_ARE_ISOLATED,
+        };
 
         // Capability Lease (Milestone "Authority Depth", P0): a lease is
         // evidence supplied to authority, never a cached authority
@@ -239,7 +319,11 @@ impl YanaAuthorityChain {
         // time-boxed, budget-boxed scope without a live human clicking
         // every call.
         if descriptor.approval == ApprovalRequirement::HumanApprovalPerCall {
-            if let Some(subject) = context.agent_id.as_deref().filter(|s| !s.is_empty()) {
+            if let Some(subject) = context
+                .agent_id
+                .as_deref()
+                .filter(|s| !s.is_empty() && !is_human_grant_subject(s))
+            {
                 let matched_lease_id = LeaseStore::for_root(&context.session.repo_root)
                     .try_consume_matching(
                         subject,
@@ -249,26 +333,49 @@ impl YanaAuthorityChain {
                     )
                     .unwrap_or(None);
                 if let Some(lease_id) = matched_lease_id {
-                    let decision_id = uuid::Uuid::new_v4().to_string();
-                    let decision = narrow_by_intent(
-                        context,
-                        descriptor.name,
-                        command_text.as_deref(),
-                        AuthorityDecision::Allow {
-                            decision_id: Some(decision_id.clone()),
-                        },
-                    );
-                    let lease_id_for_receipt =
-                        matches!(decision, AuthorityDecision::Allow { .. }).then_some(lease_id);
-                    super::receipt::record(
-                        &decision_id,
-                        context,
-                        descriptor.name,
-                        &decision,
-                        lease_id_for_receipt,
-                    );
-                    return decision;
+                    return allow_through_lease(context, descriptor.name, command_text.as_deref(), lease_id);
                 }
+            }
+        }
+
+        // A person's remembered answer ("for this session" / "always") is a
+        // lease too, but one issued to the person's own turn, not to a
+        // delegated agent. Same position as the lease check above: after
+        // HALT and availability, before the approval gate, and still
+        // narrowed by a declared intent. Skipped when `human_approved`: the
+        // person has just answered this very call, so it is recorded as
+        // their approval, not as the lease their answer created.
+        let control_level = (descriptor.approval == ApprovalRequirement::HumanApprovalPerCall
+            && context.human_initiated
+            && !human_approved)
+            .then(|| super::level_store::read_level(&context.session.repo_root));
+        // The strictest level asks every time, so it does not honor a remembered answer either.
+        // Nor does an unisolated command run on one while the person is away.
+        let waits_for_the_person = descriptor.name == "command.execute"
+            && !crate::capability::COMMANDS_ARE_ISOLATED
+            && super::away::may_be_on(&context.session.repo_root);
+        if !waits_for_the_person && control_level.is_some_and(|level| level >= ControlLevel::Remember) {
+            if let Some(lease_id) = super::human_grant::matching_human_grant(
+                &context.session.repo_root,
+                &context.session.session_id,
+                descriptor.name,
+                command_text.as_deref(),
+            ) {
+                return allow_through_lease(context, descriptor.name, command_text.as_deref(), lease_id);
+            }
+        }
+
+        // The away mode: the person left a box (time, a number of actions, a level)
+        // for the work to continue in. Inside it the call runs and is recorded;
+        // outside it the call is parked for the person, and the agent is told to
+        // carry on elsewhere. Only the person's own turn is covered.
+        if control_level.is_some() {
+            match super::away::judge(&context.session.repo_root, &facts, &context.session.session_id) {
+                AwayOutcome::NotAway => {}
+                AwayOutcome::Approved { away_id } => {
+                    return allow_through_lease(context, descriptor.name, command_text.as_deref(), format!("away:{away_id}"));
+                }
+                AwayOutcome::Parked { reason } => return parked_decision(context, descriptor.name, &reason),
             }
         }
 
@@ -281,7 +388,11 @@ impl YanaAuthorityChain {
                 context.origin, descriptor.name
             );
             // Say which lease rule refused the call (read-only; never changes the verdict).
-            if let Some(subject) = context.agent_id.as_deref().filter(|s| !s.is_empty()) {
+            if let Some(subject) = context
+                .agent_id
+                .as_deref()
+                .filter(|s| !s.is_empty() && !is_human_grant_subject(s))
+            {
                 if let Some(detail) = LeaseStore::for_root(&context.session.repo_root).explain_miss(
                     subject,
                     descriptor.name,
@@ -317,6 +428,8 @@ impl YanaAuthorityChain {
                 ),
             },
         };
+        let decision = narrow_by_intent(context, descriptor.name, command_text.as_deref(), decision);
+        let decision = apply_control_level(control_level, &facts, &decision_id, decision);
         let decision = narrow_by_intent(context, descriptor.name, command_text.as_deref(), decision);
         super::receipt::record(&decision_id, context, descriptor.name, &decision, None);
         decision

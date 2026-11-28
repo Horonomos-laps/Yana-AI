@@ -76,6 +76,15 @@ fn locked<T>(root: &Path, action: impl FnOnce() -> Result<T>) -> Result<T> {
     }
 }
 
+/// Whether the person may be away. A record that cannot be read counts as yes:
+/// the caller then asks rather than acting on an earlier answer.
+pub(crate) fn may_be_on(root: &Path) -> bool {
+    match read_record(root) {
+        Ok(record) => record.is_some_and(|record| record.is_active(Utc::now())),
+        Err(_) => true,
+    }
+}
+
 pub(crate) fn read_record(root: &Path) -> Result<Option<AwayRecord>> {
     read_json(&away_file(root)?)
 }

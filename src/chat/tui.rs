@@ -294,11 +294,6 @@ pub(super) struct App {
     /// prompt was last drawn WHOLE. A command or MCP call is approved only if this is
     /// its key: what a person cannot see in full cannot be approved. Reset on every frame.
     shown_whole_call: Option<u64>,
-    /// Whether `run_command` routes through `core/scripts/sandbox-exec.sh`
-    /// for real isolation. Default `true`; `--no-sandbox` is an explicit,
-    /// human-invoked opt-out — never a silent runtime fallback if a
-    /// sandbox mode turns out to be unavailable (see the plan).
-    use_sandbox: bool,
     /// Which sidebar panel is visible — cycled with Tab (see
     /// `sidebar::SidebarTab::next`). The Provider box above it is always
     /// shown regardless of this value.
@@ -377,7 +372,6 @@ impl App {
         history: Vec<ChatMessage>,
         verbose: bool,
         resumed: bool,
-        use_sandbox: bool,
     ) -> Self {
         let repo_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let (settings, settings_warning) = match super::settings::load(&repo_root) {
@@ -435,7 +429,6 @@ impl App {
             tool_notices: super::tools::hidden_tool_notices(&repo_root),
             shown_whole_call: None,
             repo_root: repo_root.clone(),
-            use_sandbox,
             sidebar_tab: SidebarTab::default(),
             project_counts: sidebar::read_project_counts(&repo_root),
             memory_filter: String::new(),
@@ -470,7 +463,7 @@ impl App {
     }
 
     /// The canonical `SessionContext` for the active tab (AD-17) — derived
-    /// from the existing split fields (`repo_root`/`use_sandbox` live here,
+    /// from the existing split fields (`repo_root` lives here,
     /// `session_id`/`provider`/`model` on the active `ChatTab`, reached via
     /// `Deref`), not a replacement for them. Built fresh on demand, never
     /// cached — matches `chat::tools::catalog()`'s existing "compute this
@@ -482,7 +475,7 @@ impl App {
             self.repo_root.clone(),
             self.provider.name().to_string(),
             self.model.clone(),
-            self.use_sandbox,
+            crate::capability::COMMANDS_ARE_ISOLATED,
         )
     }
 }

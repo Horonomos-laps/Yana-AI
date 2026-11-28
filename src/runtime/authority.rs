@@ -303,7 +303,7 @@ impl YanaAuthorityChain {
             command: command_text.as_deref(),
             path: path.as_deref(),
             root: &context.session.repo_root,
-            sandboxed: context.session.sandboxed,
+            sandboxed: crate::capability::COMMANDS_ARE_ISOLATED,
         };
 
         // Capability Lease (Milestone "Authority Depth", P0): a lease is
@@ -350,7 +350,11 @@ impl YanaAuthorityChain {
             && !human_approved)
             .then(|| super::level_store::read_level(&context.session.repo_root));
         // The strictest level asks every time, so it does not honor a remembered answer either.
-        if control_level.is_some_and(|level| level >= ControlLevel::Remember) {
+        // Nor does an unisolated command run on one while the person is away.
+        let waits_for_the_person = descriptor.name == "command.execute"
+            && !crate::capability::COMMANDS_ARE_ISOLATED
+            && super::away::may_be_on(&context.session.repo_root);
+        if !waits_for_the_person && control_level.is_some_and(|level| level >= ControlLevel::Remember) {
             if let Some(lease_id) = super::human_grant::matching_human_grant(
                 &context.session.repo_root,
                 &context.session.session_id,

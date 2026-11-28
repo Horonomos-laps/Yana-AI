@@ -58,7 +58,6 @@ fn app() -> App {
         )],
         false,
         true,
-        true,
     )
 }
 
@@ -71,7 +70,6 @@ fn empty_app() -> App {
         "12345678-0000-0000-0000-000000000000".to_string(),
         Vec::new(),
         false,
-        true,
         true,
     )
 }

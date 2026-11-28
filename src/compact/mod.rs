@@ -172,7 +172,7 @@ pub fn run(command: &[String], force_raw: bool) -> CompactOutcome {
         force_raw || std::env::var("YANA_COMPACT_BYPASS").ok().as_deref() == Some("1");
 
     let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let output = match spawn_command(&root, command, false) {
+    let output = match spawn_command(&root, command) {
         Ok(output) => output,
         Err(error) => {
             eprintln!("yana-rt compact: spawn failed: {error}");

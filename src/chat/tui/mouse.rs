@@ -103,7 +103,6 @@ mod tests {
             Vec::new(),
             false,
             true,
-            true,
         );
         app.settings.autosave = false;
         app.tabs_area = Rect::new(0, 1, 80, 2);

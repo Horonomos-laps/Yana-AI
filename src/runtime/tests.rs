@@ -1311,14 +1311,14 @@ fn a_level_above_the_enforced_one_asks_as_before_and_writes_down_what_it_would_h
     choose_level(root.path(), level::ControlLevel::SafeCommands);
     let context = request(root.path()).context;
 
-    let decision = YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test"));
+    let decision = YanaAuthorityChain.authorize_tool(&context, &edit_call("a.rs"));
 
     assert!(needs_approval(&decision), "levels above the enforced one must still ask");
     let lines = shadow_lines(root.path());
     assert_eq!(lines.len(), 1, "{lines:?}");
     let record: serde_json::Value = serde_json::from_str(&lines[0]).unwrap();
-    assert_eq!((record["level"].as_i64(), record["capability"].as_str()), (Some(4), Some("command.execute")));
-    assert!(!lines[0].contains("cargo test"), "the command text must not be in the record");
+    assert_eq!((record["level"].as_i64(), record["capability"].as_str()), (Some(4), Some("file.write")));
+    assert!(!lines[0].contains("a.rs"), "the path must not be in the record");
 }
 
 #[test]
@@ -1335,6 +1335,14 @@ fn nothing_is_written_down_for_a_dangerous_call_or_below_the_levels_that_shadow(
     YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test"));
 
     assert!(shadow_lines(root.path()).is_empty(), "{:?}", shadow_lines(root.path()));
+}
+
+fn edit_call(path: &str) -> ToolCall {
+    ToolCall {
+        id: "call-1".into(),
+        name: "write_file".into(),
+        arguments_json: serde_json::json!({ "path": path, "content": "x" }).to_string(),
+    }
 }
 
 fn go_away(root: &std::path::Path, budget: u32, level: level::ControlLevel) {
@@ -1354,7 +1362,7 @@ fn while_away_a_covered_call_runs_with_a_receipt_and_a_dangerous_one_is_parked()
     go_away(root.path(), 5, level::ControlLevel::SafeCommands);
     let context = request(root.path()).context;
 
-    let safe = YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test"));
+    let safe = YanaAuthorityChain.authorize_tool(&context, &edit_call("a.rs"));
     assert!(matches!(safe, AuthorityDecision::Allow { .. }), "{safe:?}");
     let receipts = std::fs::read_to_string(root.path().join(".yana-ai/authority-receipts.jsonl")).unwrap();
     assert!(receipts.contains("\"lease_id\":\"away:"), "the away box must be the recorded evidence: {receipts}");
@@ -1368,14 +1376,44 @@ fn while_away_a_covered_call_runs_with_a_receipt_and_a_dangerous_one_is_parked()
 }
 
 #[test]
+fn no_command_runs_while_away_even_when_the_session_claims_a_sandbox() {
+    let root = project_with_lock_protocol();
+    go_away(root.path(), 5, level::ControlLevel::Sandboxed);
+    let mut context = request(root.path()).context;
+    context.session.sandboxed = true;
+
+    for command in ["cargo test", "git status", "cargo run"] {
+        let decision = YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", command));
+        assert!(denial_reason(&decision).contains("not isolated"), "{command}: {decision:?}");
+    }
+    assert_eq!(away::read_record(root.path()).unwrap().unwrap().used, 0);
+}
+
+#[test]
+fn a_remembered_answer_runs_no_command_while_the_person_is_away() {
+    let root = project_with_lock_protocol();
+    remember(root.path(), "session-1", "cargo test", ApprovalScope::Always);
+    go_away(root.path(), 5, level::ControlLevel::ProjectEdits);
+    let context = request(root.path()).context;
+    let command = call_with_command("run_command", "cargo test");
+
+    let while_away = YanaAuthorityChain.authorize_tool(&context, &command);
+    assert!(denial_reason(&while_away).contains("parked for the person"), "{while_away:?}");
+
+    away::stop(root.path()).unwrap();
+    let back = YanaAuthorityChain.authorize_tool(&context, &command);
+    assert!(matches!(back, AuthorityDecision::Allow { .. }), "the answer still counts once they are back: {back:?}");
+}
+
+#[test]
 fn stopping_or_running_out_of_the_box_goes_back_to_asking() {
     let root = project_with_lock_protocol();
     go_away(root.path(), 1, level::ControlLevel::SafeCommands);
     let context = request(root.path()).context;
-    let command = call_with_command("run_command", "cargo test");
+    let command = edit_call("a.rs");
 
     assert!(matches!(YanaAuthorityChain.authorize_tool(&context, &command), AuthorityDecision::Allow { .. }));
-    let second = YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo build"));
+    let second = YanaAuthorityChain.authorize_tool(&context, &edit_call("b.rs"));
     assert!(denial_reason(&second).contains("budget"), "the budget is a hard stop");
 
     away::stop(root.path()).unwrap();
@@ -1404,7 +1442,7 @@ fn the_away_box_applies_whatever_level_is_stored() {
     go_away(root.path(), 5, level::ControlLevel::SafeCommands);
     let context = request(root.path()).context;
 
-    let decision = YanaAuthorityChain.authorize_tool(&context, &call_with_command("run_command", "cargo test"));
+    let decision = YanaAuthorityChain.authorize_tool(&context, &edit_call("a.rs"));
     assert!(matches!(decision, AuthorityDecision::Allow { .. }), "{decision:?}");
 }
 

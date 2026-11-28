@@ -8,6 +8,35 @@ All notable changes to Yana AI release packs are documented here.
 
 ---
 
+## Unreleased: approved commands run, and say they are not isolated
+
+- An approved command runs directly in the working folder, with the rights of
+  your account, its environment and network access. The approval says it is not
+  isolated. The folder's `core/scripts/sandbox-exec.sh` is no longer run, so the
+  folder cannot replace what an approval runs, and folders without that file no
+  longer fail with exit status 127.
+- On macOS and Linux a program named without a path is looked up only in `PATH`
+  directories outside the working folder. A tool installed inside the project
+  (`node_modules/.bin`, `.venv/bin`) must be named with its path.
+- There is no time limit on a command any more, and a running command cannot be
+  cancelled from the terminal chat. `--no-sandbox` is accepted by interactive
+  chat and does nothing. On Windows, commands no longer go through `bash`, so a
+  `.cmd` shim such as `npm` must be named in full.
+- In the away mode no command runs on its own, including `cargo test`,
+  `git status` and commands answered "always": each one waits for you. Levels 3
+  to 5 still edit ordinary project files while you are away. When you are
+  present, remembered answers and leases work as before, now without isolation.
+- An approval paused by an earlier version is refused for commands; ask again.
+- A folder without a Yana lock library can pause for approval, which creates
+  `.claude/state/` there. Where a library is found, activate with
+  `migrate-locking-protocol-v1.py` (in `.claude/scripts/` of an installed
+  project) with `--project-root` and `--enter-maintenance`, then `--activate`,
+  then `--leave-maintenance`; macOS and Linux only.
+- The approval store is no longer written through a symlinked `.yana-ai` folder
+  or a planted temporary file.
+
+---
+
 ## Unreleased: provider keys saved once
 
 - `yana-rt os credential set --if-absent <provider>` leaves an existing key

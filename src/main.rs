@@ -150,7 +150,7 @@ enum Commands {
         action: LeaseAction,
     },
     /// Control level: how much the agent may do without asking, from 1
-    /// (asks for everything) to 5 (sandboxed). Chosen by the person; the
+    /// (asks for everything) to 5. Chosen by the person; the
     /// record is kept outside the project.
     ///
     /// DOCTOR_DISPATCH_EXEMPT: run directly as `yana-rt level set <n>` by the person at the terminal or by the app; it is deliberately not reachable through `bin/yana`, so a script or agent that only drives the wrapper cannot raise its own level. The authority chain also refuses to run it for an agent at every level.
@@ -448,11 +448,9 @@ enum Commands {
         /// Print full upstream error detail instead of a generic message
         #[arg(long)]
         verbose: bool,
-        /// Run `run_command` tool calls directly instead of routing them
-        /// through core/scripts/sandbox-exec.sh. Human approval is still
-        /// required either way — this only controls isolation, an
-        /// explicit human opt-out, never a silent fallback.
-        #[arg(long)]
+        /// Has no effect: approved commands always run directly. Kept so
+        /// that existing scripts still start.
+        #[arg(long, hide = true)]
         no_sandbox: bool,
         /// Machine-readable stdin/NDJSON adapter used by the Desktop GUI.
         #[arg(long, hide = true)]
@@ -890,7 +888,7 @@ enum AwayAction {
         /// How many actions it may approve on its own, from 1 to 1000
         #[arg(long, default_value_t = runtime::DEFAULT_AWAY_BUDGET)]
         budget: u32,
-        /// 3 edits project files, 4 also runs safe commands, 5 also runs others inside a sandbox
+        /// 3 edits project files; 4 and 5 add commands only where they are isolated, which none is yet
         #[arg(long, default_value_t = 4)]
         level: u8,
         /// Who is starting it, recorded with the box
@@ -1290,7 +1288,7 @@ fn dispatch() {
                     std::process::exit(2);
                 }
             } else {
-                chat::dispatch(provider, model, system, resume, verbose, !no_sandbox)
+                chat::dispatch(provider, model, system, resume, verbose)
             }
         }
         #[cfg(feature = "discord")]

@@ -23,9 +23,9 @@ pub(crate) enum ControlLevel {
     Remember,
     /// 3. Also edits ordinary files inside the project.
     ProjectEdits,
-    /// 4. Also runs the short list of safe commands (status, build, test).
+    /// 4. Also runs the short list of safe commands (status, build, test), where isolated.
     SafeCommands,
-    /// 5. Also runs other commands, but only inside a sandbox.
+    /// 5. Also runs other commands, where isolated.
     Sandboxed,
 }
 
@@ -93,6 +93,9 @@ pub(crate) fn why_not(facts: &CallFacts) -> String {
         if is_opaque_command(command) {
             return "a shell or interpreter runs whatever it is given".to_string();
         }
+        if !facts.sandboxed {
+            return "commands are not isolated, so none runs without the person".to_string();
+        }
     }
     match facts.capability {
         "file.write" | "file.patch" => {
@@ -115,10 +118,11 @@ fn ordinary_project_file(facts: &CallFacts) -> bool {
 
 fn command_is_approved(level: ControlLevel, facts: &CallFacts) -> bool {
     let Some(command) = facts.command else { return false };
-    if level < ControlLevel::SafeCommands || dangerous_command(command).is_some() || is_opaque_command(command) {
+    // A "safe" build or test still runs the folder's own code, so every command needs isolation.
+    if !facts.sandboxed || level < ControlLevel::SafeCommands || dangerous_command(command).is_some() || is_opaque_command(command) {
         return false;
     }
-    is_safe_command(command) || (level == ControlLevel::Sandboxed && facts.sandboxed)
+    is_safe_command(command) || level == ControlLevel::Sandboxed
 }
 
 #[cfg(test)]
@@ -195,7 +199,7 @@ mod tests {
         let root = project();
         let level = ControlLevel::SafeCommands;
         for command in ["git status", "cargo test", "npm test", "ls -la"] {
-            assert_eq!(verdict(level, &run(root.path(), command, false)), LevelVerdict::Allow, "{command}");
+            assert_eq!(verdict(level, &run(root.path(), command, true)), LevelVerdict::Allow, "{command}");
         }
         for command in ["cargo run", "make", "git push", "rm -rf x", "bash -c ls", "npm install", "python3 x.py", ""] {
             assert_eq!(verdict(level, &run(root.path(), command, true)), LevelVerdict::Ask, "{command:?}");
@@ -212,6 +216,17 @@ mod tests {
         for command in ["rm -rf x", "git push", "npm install x", "bash -c ls", "python3 x.py", "curl https://x", "sudo ls"] {
             assert_eq!(verdict(level, &run(root.path(), command, true)), LevelVerdict::Ask, "{command} is never approved");
         }
+    }
+
+    #[test]
+    fn no_command_runs_on_its_own_without_isolation() {
+        let root = project();
+        for level in [ControlLevel::SafeCommands, ControlLevel::Sandboxed] {
+            for command in ["git status", "cargo test", "ls -la", "cargo run"] {
+                assert_eq!(verdict(level, &run(root.path(), command, false)), LevelVerdict::Ask, "{level:?} {command}");
+            }
+        }
+        assert!(why_not(&run(root.path(), "cargo test", false)).contains("isolat"));
     }
 
     #[test]

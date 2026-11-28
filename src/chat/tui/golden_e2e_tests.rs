@@ -285,7 +285,6 @@ fn golden_e2e_local_model_tool_call_round_trip() {
         initial_history,
         false, // verbose
         true, // resumed — skip the recent-sessions/workspace-restore side effects, not under test here
-        false, // use_sandbox
     );
 
     app.spawn_turn();

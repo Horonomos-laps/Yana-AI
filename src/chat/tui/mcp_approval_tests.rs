@@ -109,10 +109,10 @@ fn sh_repo(call_text: &str) -> (tempfile::TempDir, std::path::PathBuf) {
 fn after_approval_the_executor_runs_exactly_the_approved_configuration() {
     let (_k, root) = sh_repo("pong");
     let approved = disclosure_for(&root, "fake echo");
-    let result = run_approved(&root, &ChatCapabilityExecutor::new(false).with_approved_mcp(Some(approved)), "fake echo");
+    let result = run_approved(&root, &ChatCapabilityExecutor::new().with_approved_mcp(Some(approved)), "fake echo");
     assert!(!result.is_error && result.output.contains("pong") && result.output.contains("UNTRUSTED EXTERNAL CONTENT"), "{result:?}");
     // Without a handed-over disclosure (a resumed remote approval) it is disclosed again first.
-    let resumed = run_approved(&root, &ChatCapabilityExecutor::new(false), "fake echo");
+    let resumed = run_approved(&root, &ChatCapabilityExecutor::new(), "fake echo");
     assert!(!resumed.is_error && resumed.output.contains("pong"), "{resumed:?}");
 }
 
@@ -125,7 +125,7 @@ fn a_program_swapped_after_approval_does_not_run_even_if_the_new_one_was_confirm
     let approved = disclosure_for(&root, "fake echo");
     std::fs::write(root.join("evil.sh"), format!("#!/bin/sh\ntouch {}\n", marker_path.display())).unwrap();
     write_servers(&root, serde_json::json!([{"name": "fake", "command": "/bin/sh", "args": [root.join("evil.sh").to_string_lossy()]}]));
-    let result = run_approved(&root, &ChatCapabilityExecutor::new(false).with_approved_mcp(Some(approved)), "fake echo");
+    let result = run_approved(&root, &ChatCapabilityExecutor::new().with_approved_mcp(Some(approved)), "fake echo");
     assert!(result.is_error && result.output.contains("not what was approved"), "{result:?}");
     assert!(!marker_path.exists(), "the swapped program must not have run");
 }
@@ -137,7 +137,7 @@ fn a_build_without_the_client_refuses_at_the_authority_chain_before_anything_sta
     let (_k, root) = trusted_repo(one_server());
     let session = crate::session_context::SessionContext::new("s", root.clone(), "mock", "mock", false);
     let context = TurnContext::new(session, TurnOrigin::Terminal, true);
-    let error = execute_approved_tool(&YanaAuthorityChain, &ChatCapabilityExecutor::new(false), &context, &mcp_call("gh search", serde_json::json!({})), &CancellationToken::default(), &mut |_| {})
+    let error = execute_approved_tool(&YanaAuthorityChain, &ChatCapabilityExecutor::new(), &context, &mcp_call("gh search", serde_json::json!({})), &CancellationToken::default(), &mut |_| {})
         .unwrap_err()
         .to_string();
     assert!(error.contains("unavailable in this session") || error.contains("mcp.call"), "{error}");
@@ -149,7 +149,7 @@ fn an_mcp_call_is_never_executed_without_approval() {
     let session = crate::session_context::SessionContext::new("s", root.clone(), "mock", "mock", false);
     let context = crate::runtime::TurnContext::new(session, crate::runtime::TurnOrigin::Terminal, true);
     use crate::runtime::ToolExecutor;
-    let result = ChatCapabilityExecutor::new(false).execute(&context, &mcp_call("gh search", serde_json::Value::Null));
+    let result = ChatCapabilityExecutor::new().execute(&context, &mcp_call("gh search", serde_json::Value::Null));
     assert!(result.is_error && result.output.contains("no implementation"), "{result:?}");
 }
 
@@ -177,7 +177,7 @@ fn a_resumed_mcp_call_is_bound_to_the_configuration_and_the_stored_approval() {
     let call = mcp_call("fake echo", serde_json::json!({}));
     let reason = format!("needs approval | {}", crate::runtime::disclosure_summary(&root, &call).unwrap().unwrap());
     // Bound while the configuration is what was approved; swapped (and confirmed again) before it runs.
-    let bound = ChatCapabilityExecutor::new(false).bound_to_current_configuration(&call, &root, &reason);
+    let bound = ChatCapabilityExecutor::new().bound_to_current_configuration(&call, &root, &reason);
     let evil = root.join("evil.sh");
     std::fs::write(&evil, format!("#!/bin/sh\ntouch '{}'\n", root.join("evil-ran").display())).unwrap();
     write_servers(&root, serde_json::json!([{"name": "fake", "command": "/bin/sh", "args": [evil.to_string_lossy()]}]));
@@ -193,13 +193,13 @@ fn a_resumed_call_whose_configuration_does_not_match_the_stored_approval_is_refu
     let call = mcp_call("fake echo", serde_json::json!({}));
     // The stored approval was for something else (or is unreadable): the executor never runs the call.
     for reason in ["needs approval | MCP: start external program `/usr/bin/other`", "no separator at all", ""] {
-        let bound = ChatCapabilityExecutor::new(false).bound_to_current_configuration(&call, &root, reason);
+        let bound = ChatCapabilityExecutor::new().bound_to_current_configuration(&call, &root, reason);
         let result = run_approved(&root, &bound, "fake echo");
         assert!(result.is_error && result.denied && result.output.contains("ask again"), "{reason:?}: {result:?}");
     }
     assert!(!root.join("started").exists());
     // An unlisted server cannot be disclosed at all: refused as well, not run unbound.
     let missing = mcp_call("nope echo", serde_json::json!({}));
-    let bound = ChatCapabilityExecutor::new(false).bound_to_current_configuration(&missing, &root, "x | y");
+    let bound = ChatCapabilityExecutor::new().bound_to_current_configuration(&missing, &root, "x | y");
     assert!(run_approved(&root, &bound, "nope echo").is_error);
 }

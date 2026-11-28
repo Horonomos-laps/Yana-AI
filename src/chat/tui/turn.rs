@@ -40,7 +40,6 @@ impl App {
         let messages = self.history.clone();
         let session = self.session_context();
         self.tool_notices = super::super::tools::hidden_tool_notices(&self.repo_root);
-        let use_sandbox = self.use_sandbox;
         let tool_rounds = self.tool_rounds.rounds() as usize;
         let (tx, rx) = mpsc::channel::<StreamEvent>();
         let cancel = CancellationToken::default();
@@ -61,7 +60,7 @@ impl App {
             let runtime = TurnEngine::new(
                 provider,
                 Arc::new(YanaAuthorityChain),
-                Arc::new(ChatCapabilityExecutor::new(use_sandbox)),
+                Arc::new(ChatCapabilityExecutor::new()),
             );
             let result = runtime.run(request, &worker_cancel, &mut |event| {
                 tx.send(StreamEvent::Runtime(event)).ok();

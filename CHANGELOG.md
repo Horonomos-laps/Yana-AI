@@ -8,7 +8,7 @@ All notable changes to Yana AI release packs are documented here.
 
 ---
 
-## Unreleased: the app's Auto mode works
+## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.6: the app's Auto mode works (2026-11-28)
 
 - A headless chat turn may name its lease subject (`agent_id`, for example
   `agent:yana-app`). Earlier releases refused the field, so Auto turns failed.

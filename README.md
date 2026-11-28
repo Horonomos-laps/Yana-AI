@@ -125,7 +125,7 @@ Skills teach an agent how to work. Only a capability can grant permission to act
 
 |  | **Yana-AI** (you are here) | **[yana-web](https://github.com/Horonomos-laps/yana-web)** | **[Yana-studio](https://github.com/Horonomos-laps/Yana-studio)** |
 | --- | --- | --- | --- |
-| **What** | Runtime `yana-rt`, governance rules and hooks, the CLI, agents and skills | The website, and a local web app with chat, missions and a key vault | Yana for macOS and Yana Studio |
+| **What** | Runtime `yana-rt`, governance rules and hooks, the CLI, agents and skills | The website, and a local web app with chat, projects and a key vault | Yana for macOS and Yana Studio |
 | **Stack** | Rust, Python, shell | Node.js, React | SwiftUI, Code-OSS |
 | **Role** | Decides | Shows | Shows |
 

@@ -1,22 +1,29 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/yana-banner-dark.svg">
-    <img src="docs/yana-banner-light.svg" alt="Yana AI" width="760">
+    <img src="docs/yana-banner-light.svg" alt="Yana AI" width="720">
   </picture>
+  <br><br>
+  <img src="docs/yana-brand-strip.svg" alt="" width="720">
 </p>
 
-<h3 align="center">模型提议，Yana 决定，人类掌控。</h3>
+<h3 align="center">模型提议，Yana 裁决，人类掌握决定权。</h3>
 
 <p align="center">
-  运行在本机的控制平面，位于任何 AI 模型与你机器上的真实权力之间。
+  运行在本机的控制层，位于任意 AI 模型与你机器上的实际权限之间。<br>
+  负责 Yana 生态的运行时、规则与审计记录。
 </p>
 
 <p align="center">
-  <a href="https://github.com/yanacuti1121/Yana-AI/actions/workflows/ci.yml"><img src="https://github.com/yanacuti1121/Yana-AI/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://crates.io/crates/yana-rt"><img src="https://img.shields.io/crates/v/yana-rt?logo=rust&color=ce422b" alt="crates.io 上的 yana-rt"></a>
-  <a href="https://pypi.org/project/yana-ai/"><img src="https://img.shields.io/pypi/v/yana-ai?logo=pypi&color=3775a9" alt="PyPI 上的 yana-ai"></a>
-  <a href="https://github.com/yanacuti1121/Yana-AI/releases/latest"><img src="https://img.shields.io/github/v/release/yanacuti1121/Yana-AI?label=release&color=8b5cf6" alt="最新发布"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2563eb" alt="Apache 2.0 许可证"></a>
+  <a href="https://github.com/Horonomos-laps/Yana-AI/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Horonomos-laps/Yana-AI/ci.yml?branch=main&label=CI&style=flat" alt="CI" height="20"></a>
+  <a href="https://crates.io/crates/yana-rt"><img src="https://img.shields.io/crates/v/yana-rt?logo=rust&label=crates.io&color=ce422b&style=flat" alt="crates.io 上的 yana-rt" height="20"></a>
+  <a href="https://pypi.org/project/yana-ai/"><img src="https://img.shields.io/pypi/v/yana-ai?logo=pypi&label=PyPI&color=3775a9&style=flat" alt="PyPI 上的 yana-ai" height="20"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2563eb?style=flat" alt="Apache 2.0 许可证" height="20"></a>
+</p>
+
+<p align="center">
+  <a href="https://merx.help/shield"><img src="https://merx.help/badge/A+.svg" alt="AgentShield Security" height="20"></a>
+  <a href="https://launchindex.io/tool/yana-ai"><img src="https://launchindex.io/badge/yana-ai.svg" alt="Verified Launch on LaunchIndex" height="20"></a>
 </p>
 
 <p align="center">
@@ -29,106 +36,123 @@
 <p align="center">
   <a href="#快速开始">快速开始</a> ·
   <a href="#工作原理">工作原理</a> ·
-  <a href="#yana-studio">Yana Studio</a> ·
-  <a href="#性能">性能</a> ·
+  <a href="#yana-生态">生态</a> ·
+  <a href="#内部结构">内部结构</a> ·
   <a href="#保护措施与边界">边界</a> ·
   <a href="https://yana.vutam.link">网站</a>
 </p>
 
----
+<p align="center">
+  <sub>
+    <a href="CODE_OF_CONDUCT.md">行为准则</a> ·
+    <a href="CONTRIBUTING.md">参与贡献</a> ·
+    <a href="LICENSE">Apache-2.0 许可证</a> ·
+    <a href="SECURITY.md">安全政策</a>
+  </sub>
+</p>
 
-## 概览
+<br>
 
 <table>
   <tr>
-    <td align="center" width="25%"><h3>19</h3><sub>模型 provider<br>云端 13，本地 6</sub></td>
-    <td align="center" width="25%"><h3>45</h3><sub>运行时子命令<br>同一个 Rust 二进制</sub></td>
-    <td align="center" width="25%"><h3>66</h3><sub>工具调用 hook<br>Pre、Post、Stop</sub></td>
-    <td align="center" width="25%"><h3>290</h3><sub>核心文件<br>以 SHA-256 锁定</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><h3>4</h3><sub>agent 宿主<br>Claude Code、Codex、Cursor、Antigravity</sub></td>
-    <td align="center"><h3>4.2 ms</h3><sub>运行时启动<br>release 构建，Apple M4</sub></td>
-    <td align="center"><h3>100</h3><sub>专业 agent</sub></td>
-    <td align="center"><h3>2,036</h3><sub>工作知识 skill，<br>不授予权限</sub></td>
+    <td align="center" width="20%"><h3>45</h3><sub>运行时子命令<br>单个 Rust 二进制</sub></td>
+    <td align="center" width="20%"><h3>66</h3><sub>工具调用 hook<br>Pre、Post 与 Stop</sub></td>
+    <td align="center" width="20%"><h3>290</h3><sub>核心文件<br>以 SHA-256 锁定</sub></td>
+    <td align="center" width="20%"><h3>100</h3><sub>专业 agent</sub></td>
+    <td align="center" width="20%"><h3>2,036</h3><sub>工作知识 skill，<br>不授予权限</sub></td>
   </tr>
 </table>
 
-数量由 CI 运行的 `core/scripts/check_counts.py` 直接从文件系统统计。耗时为 2026-10-20 的本地测量，
-方法见[性能](#性能)一节。
+<p align="center"><sub>数量取自文件系统，并在 CI 中由 <code>core/scripts/check_counts.py</code> 校验。</sub></p>
+
+## 为什么做这个项目
+
+能执行命令的 agent，也可能执行错误的命令。skill 和提示词能让 agent 把活干得更好，却挡不住
+它造成破坏。Yana 在每个动作之前设置独立的裁决步骤，这一步不依赖模型表现良好。
+
+- 模型说明它想做什么，是否允许由 Yana 决定。
+- 每个决定都写入哈希链日志，事后改动会被发现。
+- 人随时可以让 agent 停下，有些动作没有人就无法发生。
 
 ## 快速开始
 
-**桌面应用。** 从[最新发布](https://github.com/yanacuti1121/Yana-AI/releases/latest)或
-[yana.vutam.link](https://yana.vutam.link) 下载 Yana Studio。
-
-| 平台 | 安装包 |
-| --- | --- |
-| macOS，Apple Silicon | `.dmg` 或 `.zip` |
-| Windows | `.exe`，x64 或 ARM64 |
-| Linux，x86_64 | `.deb` 或 `.AppImage` |
-
-**命令行。** 管控你已经在用的 agent：
-
 ```bash
 pip install yana-ai    # Python CLI
-yana-ai install        # 把 Yana 的 hook 和 rule 加入你的仓库
-yana-ai doctor .       # 检查是否全部接好
+yana-ai install        # 把 Yana 的 hook 和规则加入你的仓库
+yana-ai doctor .       # 检查各部分是否接好
 cargo install yana-rt  # 原生运行时，无需 Python
 ```
 
-需要 Python 3.11+（或 Rust）、Git，以及一个受支持的宿主。全部 CLI 命令见
-[COMMANDS.md](COMMANDS.md)。Yana 不在 npm 上发布，参见 [VERSIONING.md](VERSIONING.md)。
+需要 Python 3.11+（或 Rust）、Git，以及一个受支持的宿主：Claude Code、Codex、Cursor 或
+Antigravity。全部命令见 [COMMANDS.md](COMMANDS.md)。Yana 不发布到 npm，见
+[VERSIONING.md](VERSIONING.md)。
+
+**想用应用？** macOS 版 Yana 与 Yana Studio 在同一个下载包中，可从
+[Yana-studio 发布页](https://github.com/Horonomos-laps/Yana-studio/releases/latest) 或
+[yana.vutam.link](https://yana.vutam.link) 获取。需要 Apple Silicon 上的 macOS 14 或更高版本。
+
+<!-- IMAGE: Yana Studio 在审批下运行 agent -->
 
 > [!NOTE]
-> macOS 版本为 ad-hoc 签名，**未经公证（notarization）**（目前还没有 Apple Developer
-> 会员资格），因此首次启动时 Gatekeeper 会发出警告。
-> [docs/MACOS_INSTALL.md](docs/MACOS_INSTALL.md) 介绍了两种官方的打开方式。
-> 每个发布版本的文件列表各不相同：请确认有你的平台，并在提供 `SHA256SUMS` 时进行校验。
-> 目前没有 Linux ARM 版本。
+> macOS 版本使用 ad-hoc 签名，**未经 Apple 公证**（目前没有 Apple Developer 账号），首次
+> 打开时 Gatekeeper 会发出警告。[docs/MACOS_INSTALL.md](docs/MACOS_INSTALL.md) 说明了两种
+> 官方打开方式。请用发布页列出的 SHA-256 值校验下载文件。`yana-rt` 二进制提供 macOS
+> （Apple Silicon 与 Intel）、Linux x64 和 Windows x64 版本，没有 Linux ARM 版本。
 
 ## 工作原理
 
-模型可以说出它想做什么。是否允许由 Yana 决定，而人类随时可以叫停。所有模型都走同一条路径：
-Claude、GPT、Gemini、DeepSeek，或运行在你自己机器上的模型。
+Claude、GPT、Gemini、DeepSeek，或运行在你本机的模型，都走同一条路径。
 
 ```mermaid
 flowchart LR
-    M["Model<br/>提出一个动作"] --> A["Authority<br/>这个 agent 有资格请求吗？"]
-    A --> C["Capability<br/>具体是哪种权力？"]
-    C --> P["Policy<br/>先看规则，再看人"]
+    M["Model<br/>提出动作"] --> A["Authority<br/>这个 agent 可以请求吗？"]
+    A --> C["Capability<br/>具体是哪项权限？"]
+    C --> P["Policy<br/>先看规则，再问人"]
     P -->|允许| E["Executor<br/>只执行该操作"]
-    P -->|拒绝| X["已阻止<br/>附带原因"]
+    P -->|拒绝| X["已拦截<br/>附带原因"]
     E --> L[("哈希链<br/>审计日志")]
     X --> L
 ```
 
-Skill 教 agent 如何工作。只有 capability 才能授予行动的权限。
+skill 教 agent 如何工作。只有 capability 能授予行动权限。
 
-### 系统结构
+## Yana 生态
+
+|  | **Yana-AI**（当前仓库） | **[yana-web](https://github.com/Horonomos-laps/yana-web)** | **[Yana-studio](https://github.com/Horonomos-laps/Yana-studio)** |
+| --- | --- | --- | --- |
+| **内容** | 运行时 `yana-rt`、治理规则与 hook、CLI、agent 与 skill | 网站，以及在本机运行的网页应用（聊天、项目、密钥库） | macOS 版 Yana 与 Yana Studio |
+| **技术** | Rust、Python、shell | Node.js、React | SwiftUI、Code-OSS |
+| **角色** | 裁决 | 展示 | 展示 |
+
+应用不直接调用模型服务商。Studio 把每个请求都交给 `yana-rt`，换客户端也绕不过权限检查。
+
+> [!NOTE]
+> 网页应用、网站和桌面应用现在位于各自的仓库。提到 `tools/yana-web`、`tools/yana-studio`
+> 或 `tools/yana-ide` 的旧链接和历史记录指向已迁走的代码。这些部分的新工作在 yana-web 和
+> Yana-studio 进行。
+
+## 本仓库包含什么
 
 | 组件 | 作用 | 状态 |
 | --- | --- | --- |
-| **[Yana Studio](https://github.com/Horonomos-laps/Yana-studio/tree/main/yana-studio)** | 面向真实项目的桌面工作区：文件、编辑器、终端、聊天、任务和设计画布。 | ![已上线，部分功能](https://img.shields.io/badge/已上线-部分功能-2e8b75) |
-| **[运行时 `yana-rt`](src)** | Rust 引擎，为所有客户端和所有 provider 提供同一个 turn 循环和同一份 authority 契约。 | ![已上线](https://img.shields.io/badge/-已上线-2e8b75) |
-| **[Governance](core)** | Capability 清单、人工审批、哈希链审计日志、core-lock 完整性。 | ![已上线](https://img.shields.io/badge/-已上线-2e8b75) |
-| **[Giám Thị](#giám-thị)** | 运行在所有 AI 会话之外的监督者，发现偏差后阻止之后的每一次工具调用。 | ![已上线，需手动开启](https://img.shields.io/badge/已上线-需手动开启-2e8b75) |
-| **[Harness 适配器](adapters)** | Claude Code、Codex、Cursor 与 Antigravity。执行强度因宿主而异。 | ![因宿主而异](https://img.shields.io/badge/已上线-因宿主而异-2e8b75) |
-| **[知识层](core/skills)** | 教 agent 如何工作的 agent、skill、命令和规则。它们不授予任何权限。 | ![已上线](https://img.shields.io/badge/-已上线-2e8b75) |
-| **[Yana OS](src/os)** | 本地管理平面：agent 身份、自主等级、配额、健康状态、隔离。 | ![开发中](https://img.shields.io/badge/-开发中-d97706) |
-| **[Yana Desktop / Web](https://github.com/Horonomos-laps/yana-web)** | 早期的 Electron 外壳和 Web 界面。Studio 是另行重建的，不是换皮。 | ![单独维护](https://img.shields.io/badge/-单独维护-64748b) |
+| **[运行时 `yana-rt`](src)** | 所有客户端和服务商共用一个回合循环和一份 authority 约定。 | ![使用中](https://img.shields.io/badge/-使用中-2e8b75) |
+| **[治理](core)** | capability 清单、人工审批、哈希链审计日志、core-lock 完整性。 | ![使用中](https://img.shields.io/badge/-使用中-2e8b75) |
+| **[Giám Thị](#内部结构)** | 运行在所有 AI 会话之外的监督器，发现偏差后拦下之后的每次工具调用。 | ![使用中，可选启用](https://img.shields.io/badge/使用中-可选启用-2e8b75) |
+| **[Harness 适配器](adapters)** | Claude Code、Codex、Cursor 和 Antigravity。执行强度因宿主而异。 | ![因宿主而异](https://img.shields.io/badge/使用中-因宿主而异-2e8b75) |
+| **[知识层](core/skills)** | 教 agent 如何工作的 agent、skill、命令和规则，不授予任何权限。数量见下方目录树。 | ![使用中](https://img.shields.io/badge/-使用中-2e8b75) |
+| **[Yana OS](src/os)** | 本地管理层：agent 身份、自主级别、配额、健康状态、隔离。 | ![开发中](https://img.shields.io/badge/-开发中-d97706) |
 | **[Yana Wheelbot](https://github.com/yanacuti1121/yana-wheelbot)** | 基于 ESP32-S3 的机器人平台，位于独立仓库。 | ![实验性](https://img.shields.io/badge/-实验性-dc2626) |
 
-`已上线`表示已经发布并在使用。`开发中`表示已有真实代码但功能尚不完整。`实验性`表示需要手动开启，
-且尚未经过独立验证。
+`使用中` 表示已发布并在使用。`开发中` 表示已有真实代码但功能未完备。`实验性` 表示需手动
+启用，且未经独立验证。
 
-`yana-rt` 有 45 个子命令，不依赖 Python。这是按源码统计、覆盖所有构建配置（包括 feature flag
-之后的命令）的数量。
+`yana-rt` 有 45 个子命令，不依赖 Python。这是按源码统计的所有构建配置的数量，包括 feature
+开关后面的命令。
 
 ```text
 core/
-├── hooks/    # 66 个 PreToolUse / PostToolUse / Stop hook（63 个 shell，3 个 JavaScript）
-├── rules/    # 71 条规则，大多是 agent 自行遵守的指引，只有一部分由 hook 强制执行
+├── hooks/    # 66 个 PreToolUse / PostToolUse / Stop hook，实际运行哪些由 settings.json 决定
+├── rules/    # 71 条规则，大多是 agent 自行遵循的指引，hook 只强制执行其中一部分
 ├── agents/   # 100 个专业 agent
 ├── skills/   # 2,036 个 skill
 ├── commands/ # 170 个 Claude Code 斜杠命令
@@ -136,145 +160,117 @@ core/
     └── core-lock.json    # SHA-256 清单，锁定 290 个核心文件
 ```
 
-## Yana Studio
+## 内部结构
 
-<p align="center">
-  <img src="docs/studio-screen-1.webp" alt="Yana Studio 工作区，显示聊天、项目检查器和治理状态" width="900">
-</p>
-
-把在项目中与 AI 协作时需要来回切换的东西放进一个窗口。Studio 只通过 `yana-rt` 与模型通信，
-界面层从不直接调用 provider。
-
-| 区域 | 功能 |
-| --- | --- |
-| **文件与编辑器** | 打开真实文件夹，按文件名搜索，用 CodeMirror 编辑。8 MiB 以内的文件可编辑，更大的文件以 256 KiB 只读窗口打开。保存前会检测外部改动。 |
-| **终端** | 以标签页打开的真实 PTY 会话，或最多 12 个的网格。 |
-| **Git** | 只读的状态、worktree 和 diff。stage 和 commit 有意不作为 AI 工具。 |
-| **聊天** | 经 `yana-rt` 流式输出，保存多个对话，停止按钮，审批提示，token 用量。 |
-| **模型** | 全部 19 个 provider，外加自定义的 OpenAI 兼容端点。本地管理器可检测 9Router、Ollama、LM Studio、llama.cpp、TurboFieldfare 和 AirLLM。API key 通过 stdin 传给 Rust，加密保存在操作系统密钥库中，从不写入工作区文件。 |
-| **任务** | 使用真实的 `yana-rt task` 存储。标记完成需要证据，`blocked` 状态由运行时计算。 |
-| **设计画布** | 原生画布，含 22 个组件、手机和桌面屏幕、图层、撤销/重做以及受控的 AI 提议。 |
-| **治理遥测** | 什么被允许，什么被阻止，以及原因。 |
-
-尚未实现：设备列表、agent 会话界面、手机配对、SSH/Docker 执行、限时授权界面、带签名的自动更新。
-各界面状态见 Yana-studio 仓库中的 [`yana-studio/SCREEN-STATUS.md`](https://github.com/Horonomos-laps/Yana-studio/blob/main/yana-studio/SCREEN-STATUS.md)。
+展开各项查看细节。
 
 <details>
-<summary><b>从源码构建 Studio（Yana-studio 仓库）</b></summary>
+<summary><b>运行时：Rust 引擎 yana-rt</b></summary>
 
-需要 Node 24+ 以及用于 `node-pty` 的 C++ 工具链。
+一个 Rust 二进制掌管所有客户端的回合循环和 authority 检查，因此 Studio、CLI 和 MCP 不必
+各自实现权限逻辑。
 
-```bash
-git clone https://github.com/Horonomos-laps/Yana-studio.git && cd Yana-studio
-(cd yana-ide/studio-web && npm ci)
-cd yana-studio
-npm ci && npm run rebuild
-npm run stage:runtime -- /yana-rt/的/绝对/路径
-npm start
-```
+- **Provider：** anthropic、openai、gemini、groq、deepseek、openrouter、xai、novita、nvidia、minimax、glm、huggingface、9router、kimi、mistral、together、fireworks、deepinfra、cerebras、sambanova、perplexity、qwen、cohere、ai21、ernie（云端），以及 ollama、lmstudio、llamacpp、turbofieldfare、airllm、vllm、jan（本地）。权威列表见 [`src/model/catalog.rs`](src/model/catalog.rs)。
+- **故障切换：** 分类型的服务商错误、备用服务商、凭据池轮换。
+- **状态：** 支持全文检索的 SQLite 会话存储、按 profile 隔离的状态、崩溃恢复、可回滚的 shadow-git 检查点。
+- **Capability 工具：** 文件读取与打补丁、经校验的命令执行、stdio MCP 客户端、经受控 HTTPS 层的 `web.search`、只读 LSP 客户端。
+- **功能开关：** 默认构建包含 `cli` 和 `mcp`（MCP 服务端与客户端）。`lsp`、`pty-bridge` 和 Discord 远程适配器为可选项，默认关闭。
+
+运行时的剩余工作记录在 [CURRENT-MILESTONE.md](CURRENT-MILESTONE.md)：让所有客户端统一到一个
+capability executor，并用真实的本地模型（而非 mock）测试工具调用。
 
 </details>
 
-## 运行时：`yana-rt`
+<details>
+<summary><b>性能：测量数据在哪里</b></summary>
 
-一个 Rust 二进制负责所有客户端的 turn 循环和 authority 检查，因此 Studio、CLI 和 MCP 不必各自
-重写权限逻辑。
+注明日期、版本、机器和方法的测量数据见 [BENCHMARK.md](BENCHMARK.md)。本页不再抄录，以免
+旧数据被当成现状。
 
-- **Provider：** anthropic、openai、gemini、groq、deepseek、openrouter、xai、novita、nvidia、minimax、glm、huggingface、9router、kimi（云端），以及 ollama、lmstudio、llamacpp、turbofieldfare、airllm（本地）。权威列表在 [`src/model/catalog.rs`](src/model/catalog.rs)，由契约测试保证 Studio 与之同步。
-- **故障转移：** 带类型的 provider 错误、备用 provider 和凭据池轮换。
-- **状态：** 支持全文检索的 SQLite 会话存储、按配置文件区分的状态、崩溃恢复，以及可回滚的 shadow-git 检查点。
-- **Capability 工具：** 文件读取/补丁、经过校验的命令执行、基于 stdio 的 MCP 客户端、经受检 HTTPS 层的 `web.search`，以及只读 LSP 客户端。
-- **功能：** 默认构建包含 `cli` 和 `mcp`（MCP 服务器与客户端）。`lsp`、`pty-bridge` 和 Discord 远程适配器为可选功能，默认关闭。
+</details>
 
-运行时的剩余工作见 [CURRENT-MILESTONE.md](CURRENT-MILESTONE.md)：把所有客户端统一到同一个
-capability 执行器，以及用真实本地模型而不是 mock 测试工具调用。
+<details>
+<summary><b>Giám Thị：独立监督器</b></summary>
 
-## 性能
+它运行在所有 AI 会话之外，由操作系统自身的调度器（macOS 的 launchd、Linux 的 systemd
+timer、Windows 的 Task Scheduler）每 6 小时启动一次。
 
-2026-11-16 在 Apple M4 MacBook Air（16 GB 内存，macOS 27.3）上，用发布提交 `c8c29fb2` 的
-`yana-rt` 1.5.4 默认 release 构建，以本仓库为对象测量。Rust 与 Python 在一次预热后交替运行，
-每个数值为中位数（运行次数见表）。Python 一列是对应 Rust 命令所替代的脚本。最后一列为
-2026-11-15 用同一方法测得的 1.5.2；完整历史见 [BENCHMARK.md](BENCHMARK.md) 和
-[技术报告](https://yana.vutam.link/whitepaper-en.html)。
+1. 把控制执行机制的文件与经人工批准的基线提交作比较：Claude Code、Codex 和 Cursor 的 hook 配置、CI 工作流、`core/rules`、`core/gates`、`core/hooks`、`core/scripts` 和 `src/guard`。
+2. 发现偏差时写入 `GIAMTHI_HALT.lock`。只要锁文件存在，每次工具调用中最先运行的 hook 就会拒绝一切。
+3. 只有人删除锁文件才能解除。hook、监督器和任何环境变量都无法解除。
 
-| 路径 | `yana-rt` 1.5.4 | Python | 结果 | 输出一致？ | 1.5.2（2026-11-15） |
-| --- | ---: | ---: | --- | --- | --- |
-| 进程启动（60 次） | **6.17 ms** | | | | 4.21 ms |
-| `doctor`（12） | **152 ms** | 209 ms | Rust 快 1.4 倍 | | 139 ms，1.4 倍 |
-| `ci check`（20） | **7.2 ms** | 34.1 ms | Rust 快 4.8 倍 | 是，双方各 6 条警告 | 5.7 ms，5.4 倍 |
-| `scan core/skills`（5） | **0.58 s** | 8.60 s | Rust 快 14.8 倍 | 首要发现相同（`SE004`）；文件数 1,794 对 1,825 | 0.56 s，14.5 倍 |
-| 破坏性命令 guard（40） | **5.91 ms** | | | | 5.27 ms |
-| token-budget guard（40） | **5.64 ms** | | | | 未测量 |
+用 `yana-ai giamthi install | status | repair | uninstall` 管理。它需要手动启用，且按计划运行，
+因此从改动到拦停之间最长有 6 小时的窗口。Codex 只在 shell 命令上触发 `PreToolUse`，所以对
+Codex，Yana 还会在 `SessionStart` 和 `UserPromptSubmit` 检查锁。
 
-| 内存与体积 | `yana-rt` 1.5.4 | Python |
-| --- | ---: | ---: |
-| 峰值 RSS，`scan core/skills` | **16.3 MiB** | 25.4 MiB |
-| 峰值 RSS，默认全仓库扫描 | **20.7 MiB** | 32.1 MiB |
-| Release 二进制（默认构建） | 22.9 MiB | |
+</details>
 
-加速比与 1.5.2 的测量一致。测量时机器较忙（平均负载 5.0 到 5.2），Rust 的绝对时间比 2026-11-15
-高 3% 到 47%；这两次测量还不能区分机器和代码各自的影响。自 10 月 MCP 服务器进入默认构建以来，
-二进制一直是 22.9 MiB。
+<details>
+<summary><b>Harness 适配器：Claude Code、Codex、Cursor、Antigravity</b></summary>
 
-> [!WARNING]
-> 默认的全仓库 `scan` 目前还不是同等条件的对比：双方的默认范围不同（Rust 0.29 秒，Python
-> 6.89 秒）。这是需要补齐的一致性差距，而不是快了 23 倍。token-budget guard 的时间是在已有
-> `flock-v1` 标记的项目中首次调用时测得的。
-
-以上为单台机器上的数据。Linux 和 Windows 尚未测量。
-
-## Giám Thị
-
-一个运行在所有 AI 会话之外的独立监督者，由操作系统自己的调度器（macOS 的 launchd、Linux 的
-systemd timer、Windows 的任务计划程序）每 6 小时运行一次。
-
-1. 它把仓库中控制执行的文件与人工批准的基准提交进行比较：Claude Code、Codex 和 Cursor 的 hook 配置、CI 工作流、`core/rules`、`core/gates`、`core/hooks`、`core/scripts` 和 `src/guard`。
-2. 发现偏差时写入 `GIAMTHI_HALT.lock`。每次工具调用最先运行的 hook 会在锁文件存在期间拒绝一切调用。
-3. 只有人删除锁文件才能解除。hook、监督者和任何环境变量都无法解除。
-
-用 `yana-ai giamthi install | status | repair | uninstall` 管理。它需要手动开启，并且由于按计划
-运行，从改动到锁定之间最多有 6 小时的间隔。Codex 只对 shell 命令触发 `PreToolUse`，因此对 Codex
-还会在 `SessionStart` 和 `UserPromptSubmit` 时检查锁文件。
-
-## Harness 适配器
-
-| 宿主 | 如何应用治理 | 执行程度 |
+| 宿主 | 治理方式 | 执行强度 |
 | --- | --- | --- |
-| **Claude Code** | `.claude/` 中的原生 hook 和规则 | 每次工具调用都在运行时拦截，哈希链审计 |
-| **Codex** | `AGENTS.md`、`.codex/` hook、同步的 skill 和 agent（`yana-ai install --engine codex`） | 项目范围的 hook |
+| **Claude Code** | `.claude/` 中的原生 hook 和规则 | 运行时拦截每次工具调用，哈希链审计 |
+| **Codex** | `AGENTS.md`、`.codex/` hook、同步 skill 和 agent（`yana-ai install --engine codex`） | 项目范围的 hook |
 | **Cursor** | `.cursorrules`、`.cursor/rules`、`beforeShellExecution` hook | 检查 shell 命令；不覆盖 MCP 工具调用 |
-| **Antigravity** | `.agents/rules/yana-ai.md` 与 `.agents/hooks.json` 中的 `PreToolUse` hook（`yana-ai install --engine antigravity`） | shell 命令由 `guard-destructive.sh` 检查；Giám Thị 的 HALT 锁阻止所有工具调用；使用 `agy --dangerously-skip-permissions` 时会被跳过 |
+| **Antigravity** | `.agents/rules/yana-ai.md` 与 `.agents/hooks.json` 中的 `PreToolUse` hook（`yana-ai install --engine antigravity`） | shell 命令由 `guard-destructive.sh` 检查；Giám Thị 的 HALT 拦截所有工具调用；`agy --dangerously-skip-permissions` 会跳过 |
 
-详情和切换命令：[adapters/README.md](adapters/README.md)。170 个 Claude Code 斜杠命令（`/plan`、
+详情与切换命令见 [adapters/README.md](adapters/README.md)。Claude Code 斜杠命令（`/plan`、
 `/verify`、`/code-review` 等）位于 `core/commands/`，在会话内运行。
+
+</details>
 
 ## 保护措施与边界
 
 | 保护措施 | 作用 | 边界 |
 | --- | --- | --- |
-| **审计日志** | 哈希链结构，修改或删除任何一行都会被发现（`core/scripts/verify-audit-chain.sh`）。 | 可检测篡改，不能防止篡改。 |
-| **Core-lock** | SHA-256 清单检测 `core/` 中被修改、删除或注入的文件。 | 只证明文件树与锁一致，不证明有人审查过：能改 `core/` 的人也能重新生成锁。独立检查由 Giám Thị 负责。 |
-| **人工关卡** | force-push、publish、deploy 和删除需要在当前会话中确认。 | 之前的批准不会延续。 |
-| **Giám Thị** | 发现问题后阻止之后的所有工具调用，直到有人移除锁。 | 需手动开启，定期运行，不是即时的。 |
-| **规则与 hook** | hook 在运行时拦截。 | `core/rules` 中大多数文件描述的是 agent 自行遵守的行为，只有接入 hook 的部分才被强制执行。没有代码签名流程。 |
-| **破坏性命令 guard** | `guard-destructive.sh` 拦截 `rm -rf`、force-push、`DROP TABLE` 等。 | 匹配的是命令字符串而非完整的 shell 解析，刻意构造的命令可能绕过。 |
+| **审计日志** | 哈希链结构，修改或删除任一行都会被发现（`core/scripts/verify-audit-chain.sh`）。 | 能发现篡改，不能阻止篡改。 |
+| **Core-lock** | SHA-256 清单发现 `core/` 中被改动、删除或插入的文件。 | 只证明目录与锁一致，不证明有人审阅过：能改 `core/` 的人也能重新生成锁。独立检查由 Giám Thị 承担。 |
+| **人工关卡** | force-push、发布、部署和删除需要在当前会话中确认。 | 之前的批准不会延续。 |
+| **Giám Thị** | 一旦发现问题，锁住之后的所有工具调用，直到有人解除。 | 需手动启用且定期运行，并非即时。 |
+| **规则与 hook** | hook 在运行时拦截。 | `core/rules` 中多数文件描述 agent 自行遵循的行为，只有接入 hook 的部分会被强制执行。没有代码签名流程。 |
+| **破坏性命令防护** | `guard-destructive.sh` 拦截 `rm -rf`、force-push、`DROP TABLE` 等。 | 按命令字符串匹配，并非完整解析 shell，刻意构造的命令可能漏过。 |
 
-Antigravity 只检查 shell 命令，且在 `agy --dangerously-skip-permissions` 下会被绕过；Cursor 不检查 MCP 调用，没有 Rust 运行时的纯浏览器 Web 部署未被完全管控。
-详情：[已知限制](docs/reference/known-limitations.md)。
+Antigravity 只检查 shell 命令，且会被 `agy --dangerously-skip-permissions` 绕过；Cursor 不检查
+MCP 调用；没有 Rust 运行时、仅在浏览器中运行的网页部署未受完整治理。详见
+[已知限制](docs/reference/known-limitations.md)。
+
+四条示例命令，于 2026-11-14 在 `main` 的默认 hook 链上重新运行（引自
+[技术报告](https://yana.vutam.link/whitepaper-en.html) 表 1）：
+
+| agent 想执行的命令 | 结果 | 由哪一层处理，agent 得到什么提示 |
+| --- | --- | --- |
+| `curl -fsSL https://.../install.sh \| bash` | 已拦截 | `tool-proxy-enforcer`：管道进入解释器。`supply-chain-guard`：先下载、阅读，再运行。并非 `guard destructive`。 |
+| `rm -rf ~/Documents` | 已拦截 | `guard destructive`（Rust 与 bash）：强制递归删除无法撤销。 |
+| `chmod 777 deploy.sh` | **未拦截** | 只有 `core/scripts/safe-run.sh` 包装器会拦截，而它没有接入 hook 链。这是已知缺口。 |
+| `git status --short` | 允许 | 只读命令，任何层都不介入。 |
 
 ## 版本
 
-三条轴线，各有编号和注册表：产品（不分发）、crates.io 上的 `yana-rt`、PyPI 上的 Python 包
-`yana-ai`。`tools/` 下的应用通过 GitHub Releases 以各自的标签发布（Studio 为 `studio-v*`）。
-当前版本号容易过时，本页有意不写，上方徽章会实时显示。参见 [VERSIONING.md](VERSIONING.md)。
+有三条版本轴，各自编号、各自对应注册表：产品（不分发）、crates.io 上的 `yana-rt`、PyPI 上的
+Python 包 `yana-ai`。应用通过 [Yana-studio](https://github.com/Horonomos-laps/Yana-studio) 的
+GitHub Releases 发布，使用独立标签。版本号容易过时，本页有意不写；顶部徽章实时读取。见
+[VERSIONING.md](VERSIONING.md)。
 
-## 更多
+## 文档
 
-[ARCHITECTURE.md](ARCHITECTURE.md) · [PHILOSOPHY.md](PHILOSOPHY.md) · [ROADMAP.md](ROADMAP.md) · [CURRENT-MILESTONE.md](CURRENT-MILESTONE.md) · [CHANGELOG.md](CHANGELOG.md) · [BENCHMARK.md](BENCHMARK.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · [致谢](ACKNOWLEDGEMENTS.md) · [渊源](docs/history/LINEAGE.md)
+| 了解 | 构建 | 信任 | 进展 |
+| --- | --- | --- | --- |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | [CONTRIBUTING.md](CONTRIBUTING.md) | [SECURITY.md](SECURITY.md) | [ROADMAP.md](ROADMAP.md) |
+| [PHILOSOPHY.md](PHILOSOPHY.md) | [COMMANDS.md](COMMANDS.md) | [已知限制](docs/reference/known-limitations.md) | [CURRENT-MILESTONE.md](CURRENT-MILESTONE.md) |
+| [沿革](docs/history/LINEAGE.md) | [BENCHMARK.md](BENCHMARK.md) | [致谢](ACKNOWLEDGEMENTS.md) | [CHANGELOG.md](CHANGELOG.md) |
 
 ---
 
 <p align="center">
-  一个人打造，没有团队，没有融资：<b>Vũ Văn Tâm</b>，越南<br>
-  <a href="https://yana.vutam.link/">yana.vutam.link</a> · phamlongh230@gmail.com · <a href="LICENSE">Apache 2.0</a>
+  <img src="docs/yana-hero.svg" alt="Yana AI：AI 干活，权力在你手中。" width="100%" />
+</p>
+
+<p align="center">
+  由一个人打造，没有团队，没有资助：<b>Vũ Văn Tâm</b>，越南<br>
+  <a href="https://yana.vutam.link/">yana.vutam.link</a> ·
+  <a href="https://github.com/Horonomos-laps/Yana-AI">Yana-AI</a> ·
+  <a href="https://github.com/Horonomos-laps/yana-web">yana-web</a> ·
+  <a href="https://github.com/Horonomos-laps/Yana-studio">Yana-studio</a> ·
+  <a href="LICENSE">Apache 2.0</a>
 </p>

@@ -36,7 +36,7 @@ impl ChatProvider for FakeProvider {
 }
 
 pub(super) fn app_in(root: &std::path::Path) -> App {
-    let mut app = App::new(Arc::new(FakeProvider), "local-test".to_string(), None, None, Uuid::new_v4().to_string(), Vec::new(), false, true, true);
+    let mut app = App::new(Arc::new(FakeProvider), "local-test".to_string(), None, None, Uuid::new_v4().to_string(), Vec::new(), false, true);
     app.settings.autosave = false;
     app.repo_root = root.to_path_buf();
     // Past the round ceiling, so error paths stop at the guard instead of starting a turn.

@@ -22,8 +22,8 @@ pub struct SessionContext {
     pub repo_root: PathBuf,
     pub provider_name: String,
     pub model: String,
-    /// Mirrors `App::use_sandbox` — whether command execution routes
-    /// through `core/scripts/sandbox-exec.sh`.
+    /// Kept so saved approvals still parse. Never read for a decision: a saved
+    /// record could claim anything (see `capability::COMMANDS_ARE_ISOLATED`).
     pub sandboxed: bool,
 }
 

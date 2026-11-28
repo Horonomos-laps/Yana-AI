@@ -138,7 +138,7 @@ fn the_plain_executor_has_no_lsp_branch_so_nothing_runs_without_approval() {
     let session = crate::session_context::SessionContext::new("s", root.clone(), "mock", "mock", false);
     let context = crate::runtime::TurnContext::new(session, crate::runtime::TurnOrigin::Terminal, true);
     use crate::runtime::ToolExecutor;
-    let result = ChatCapabilityExecutor::new(false).execute(&context, &lsp_call("hover", "src/lib.rs", 1));
+    let result = ChatCapabilityExecutor::new().execute(&context, &lsp_call("hover", "src/lib.rs", 1));
     assert!(result.is_error && result.output.contains("no implementation"), "{result:?}");
 }
 
@@ -194,11 +194,11 @@ fn after_approval_the_executor_runs_exactly_the_approved_program() {
     let marker = serve(&root, r#"{"contents":"fn alpha()"}"#);
     let call = lsp_call("hover", "src/lib.rs", 1);
     let approved = crate::capability::lsp_disclosure::disclose(&root, &serde_json::from_str::<serde_json::Value>(&call.arguments_json).unwrap()).unwrap();
-    let result = run_approved(&root, &ChatCapabilityExecutor::new(false).with_approved_lsp(Some(approved)), &call);
+    let result = run_approved(&root, &ChatCapabilityExecutor::new().with_approved_lsp(Some(approved)), &call);
     assert!(!result.is_error && result.output.contains("fn alpha()") && result.output.contains("UNTRUSTED EXTERNAL CONTENT"), "{result:?}");
     assert!(marker.exists(), "the server really ran");
     // Without a handed-over disclosure (a resumed remote approval) it is disclosed again first.
-    let resumed = run_approved(&root, &ChatCapabilityExecutor::new(false), &call);
+    let resumed = run_approved(&root, &ChatCapabilityExecutor::new(), &call);
     assert!(!resumed.is_error && resumed.output.contains("fn alpha()"), "{resumed:?}");
 }
 
@@ -212,7 +212,7 @@ fn a_program_swapped_after_approval_does_not_run_even_if_the_new_one_was_confirm
     let evil = root.join("evil.sh");
     std::fs::write(&evil, format!("#!/bin/sh\ntouch '{}'\n", root.join("evil-ran").display())).unwrap();
     list(&root, "/bin/sh", vec![evil.to_string_lossy().into_owned()]);
-    let result = run_approved(&root, &ChatCapabilityExecutor::new(false).with_approved_lsp(Some(approved)), &call);
+    let result = run_approved(&root, &ChatCapabilityExecutor::new().with_approved_lsp(Some(approved)), &call);
     assert!(result.is_error && result.output.contains("not what was approved"), "{result:?}");
     assert!(!root.join("evil-ran").exists(), "the swapped program must not have run");
 }
@@ -224,7 +224,7 @@ fn a_resumed_call_is_bound_to_the_configuration_seen_when_the_executor_was_built
     let marker = serve(&root, "null");
     let call = lsp_call("hover", "src/lib.rs", 1);
     let reason = format!("needs approval | {}", crate::runtime::disclosure_summary(&root, &call).unwrap().unwrap());
-    let executor = ChatCapabilityExecutor::new(false).bound_to_current_configuration(&call, &root, &reason);
+    let executor = ChatCapabilityExecutor::new().bound_to_current_configuration(&call, &root, &reason);
     // The program is swapped (and confirmed again) after the executor was built, before it runs.
     let evil = root.join("evil.sh");
     std::fs::write(&evil, format!("#!/bin/sh\ntouch '{}'\n", root.join("evil-ran").display())).unwrap();
@@ -236,7 +236,7 @@ fn a_resumed_call_is_bound_to_the_configuration_seen_when_the_executor_was_built
     let (_k2, root2) = lsp_repo(Vec::new());
     serve(&root2, r#"{"contents":"ok"}"#);
     let reason2 = format!("needs approval | {}", crate::runtime::disclosure_summary(&root2, &call).unwrap().unwrap());
-    let bound = ChatCapabilityExecutor::new(false).bound_to_current_configuration(&call, &root2, &reason2);
+    let bound = ChatCapabilityExecutor::new().bound_to_current_configuration(&call, &root2, &reason2);
     assert!(!run_approved(&root2, &bound, &call).is_error);
 }
 
@@ -247,7 +247,7 @@ fn a_resumed_lsp_query_that_does_not_match_the_stored_approval_is_refused_outrig
     let marker = serve(&root, "null");
     let call = lsp_call("hover", "src/lib.rs", 1);
     for reason in ["needs approval | LSP: start external program `/usr/bin/other`", "", "no separator"] {
-        let bound = ChatCapabilityExecutor::new(false).bound_to_current_configuration(&call, &root, reason);
+        let bound = ChatCapabilityExecutor::new().bound_to_current_configuration(&call, &root, reason);
         let result = run_approved(&root, &bound, &call);
         assert!(result.is_error && result.denied && result.output.contains("ask again"), "{reason:?}: {result:?}");
     }
@@ -261,7 +261,7 @@ fn a_build_without_the_client_refuses_at_the_authority_chain_before_anything_sta
     let (_k, root) = lsp_repo(Vec::new());
     let session = crate::session_context::SessionContext::new("s", root.clone(), "mock", "mock", false);
     let context = TurnContext::new(session, TurnOrigin::Terminal, true);
-    let error = execute_approved_tool(&YanaAuthorityChain, &ChatCapabilityExecutor::new(false), &context, &lsp_call("hover", "src/lib.rs", 1), &CancellationToken::default(), &mut |_| {})
+    let error = execute_approved_tool(&YanaAuthorityChain, &ChatCapabilityExecutor::new(), &context, &lsp_call("hover", "src/lib.rs", 1), &CancellationToken::default(), &mut |_| {})
         .unwrap_err()
         .to_string();
     assert!(error.contains("capability 'lsp.query' is unavailable in this session"), "{error}");

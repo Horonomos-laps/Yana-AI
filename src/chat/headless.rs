@@ -174,7 +174,7 @@ pub(super) fn dispatch(provider_name: String, model: Option<String>) -> Result<(
         repo_root,
         provider.name(),
         model.clone(),
-        true,
+        crate::capability::COMMANDS_ARE_ISOLATED
     );
     let context = TurnContext::new(session.clone(), TurnOrigin::Desktop, true);
     let plan_mode = parse_mode(input.mode.as_deref())?;
@@ -196,9 +196,7 @@ pub(super) fn dispatch(provider_name: String, model: Option<String>) -> Result<(
         request = request.with_api_key(api_key);
     }
 
-    let executor = Arc::new(crate::chat::tui::tool_dispatch::ChatCapabilityExecutor::new(
-        session.sandboxed,
-    ).in_plan_mode(plan_mode));
+    let executor = Arc::new(crate::chat::tui::tool_dispatch::ChatCapabilityExecutor::new().in_plan_mode(plan_mode));
     let engine = TurnEngine::new(provider, Arc::new(YanaAuthorityChain), executor);
     let cancellation = CancellationToken::default();
     let mut output = io::BufWriter::new(io::stdout().lock());
@@ -245,7 +243,7 @@ pub(super) fn dispatch(provider_name: String, model: Option<String>) -> Result<(
                     reason,
                     30,
                 )
-                .context("cannot persist pending approval")?;
+                .map_err(|error| anyhow::anyhow!("cannot persist pending approval: {error:#}"))?;
             write_json_line(
                 &mut output,
                 &json!({
@@ -315,7 +313,7 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
         call: &resolved.pending_call,
         approved: input.decision,
         decided_by: &input.decided_by,
-        scope: input.scope,
+        scope: crate::runtime::scope_to_remember(&resolved, input.scope),
     });
     let warning = project_code_warning(&resolved.pending_call);
     announce_grant(&grant, warning);
@@ -334,7 +332,7 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
     }
     // Bound to the configuration as it is now, before the turn resumes (see the method's doc).
     let executor = Arc::new(
-        crate::chat::tui::tool_dispatch::ChatCapabilityExecutor::new(session.sandboxed)
+        crate::chat::tui::tool_dispatch::ChatCapabilityExecutor::new()
             .bound_to_current_configuration(&resolved.pending_call, &resolved.context.session.repo_root, &resolved.authority_reason),
     );
     let cancellation = CancellationToken::default();
@@ -398,7 +396,7 @@ pub(super) fn dispatch_resume(provider_name: String) -> Result<()> {
                     reason,
                     30,
                 )
-                .context("cannot persist pending approval")?;
+                .map_err(|error| anyhow::anyhow!("cannot persist pending approval: {error:#}"))?;
             write_json_line(
                 &mut output,
                 &json!({
@@ -1321,7 +1319,8 @@ mod tests {
         use crate::session_context::SessionContext;
         use std::path::PathBuf;
 
-        let session = SessionContext::new("s1", PathBuf::from("/tmp/repo"), "anthropic", "m", true);
+        let session = SessionContext::new("s1", PathBuf::from("/tmp/repo"), "anthropic", "m",
+        crate::capability::COMMANDS_ARE_ISOLATED);
         let mut output = Vec::new();
         // TurnStarted, MessageStarted, TurnResumed, MessageCompleted: none
         // of these are classified as Activity-relevant (see write_event's

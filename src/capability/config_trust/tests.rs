@@ -345,7 +345,7 @@ fn a_command_the_agent_started_cannot_confirm() {
 #[test]
 fn every_command_the_agent_spawns_carries_the_marker() {
     let dir = tempfile::tempdir().unwrap();
-    let output = crate::capability::command::spawn_command(dir.path(), &["/usr/bin/env".to_string()], false).unwrap();
+    let output = crate::capability::command::spawn_command(dir.path(), &["/usr/bin/env".to_string()]).unwrap();
     let text = String::from_utf8_lossy(&output.stdout);
     assert!(text.lines().any(|l| l == "YANA_AGENT_CHILD=1"), "{text}");
 }

@@ -142,7 +142,7 @@ pub(super) fn draw_approval_prompt(frame: &mut Frame, pending: &PendingApproval,
             guard_verdict: Some(reason),
             ..
         } => (
-            " approve command ",
+            " approve command (not isolated) ",
             Color::Red,
             vec![
                 Line::styled(
@@ -157,7 +157,7 @@ pub(super) fn draw_approval_prompt(frame: &mut Frame, pending: &PendingApproval,
             ],
         ),
         PendingApproval::Command { command, .. } => (
-            " approve command ",
+            " approve command (not isolated) ",
             Color::Yellow,
             match command_view {
                 Some(Ok(lines)) => lines,

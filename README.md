@@ -89,16 +89,19 @@ Needs Python 3.11+ (or Rust), Git, and one supported host: Claude Code, Codex, C
 or Antigravity. All commands are in [COMMANDS.md](COMMANDS.md). Yana is not published
 to npm, see [VERSIONING.md](VERSIONING.md).
 
-**Prefer an app?** Download Yana Studio or the macOS app from the
+**Prefer an app?** Yana for macOS and Yana Studio come in one download from the
 [Yana-studio releases](https://github.com/Horonomos-laps/Yana-studio/releases/latest) or
-from [yana.vutam.link](https://yana.vutam.link).
+from [yana.vutam.link](https://yana.vutam.link). They need macOS 14 or later on Apple Silicon.
+
+<!-- IMAGE: Yana Studio running an agent under approval -->
 
 > [!NOTE]
 > The macOS build is ad-hoc signed and **not notarized** (no Apple Developer
 > membership yet), so Gatekeeper warns on first launch.
 > [docs/MACOS_INSTALL.md](docs/MACOS_INSTALL.md) shows the two official ways to open it.
-> Verify downloads against `SHA256SUMS` when a release provides it. There is no Linux
-> ARM build.
+> Verify downloads against the SHA-256 values listed on the release. `yana-rt` binaries
+> are released for macOS (Apple Silicon and Intel), Linux x64 and Windows x64. There is
+> no Linux ARM binary.
 
 ## How it works
 
@@ -122,8 +125,8 @@ Skills teach an agent how to work. Only a capability can grant permission to act
 
 |  | **Yana-AI** (you are here) | **[yana-web](https://github.com/Horonomos-laps/yana-web)** | **[Yana-studio](https://github.com/Horonomos-laps/Yana-studio)** |
 | --- | --- | --- | --- |
-| **What** | Runtime `yana-rt`, governance rules and hooks, the CLI, agents and skills | The website, and a local web app with chat, missions and a key vault | Desktop apps: the macOS app, Yana Studio and Yana IDE |
-| **Stack** | Rust, Python, shell | Node.js, React | SwiftUI, Electron, Code-OSS |
+| **What** | Runtime `yana-rt`, governance rules and hooks, the CLI, agents and skills | The website, and a local web app with chat, missions and a key vault | Yana for macOS and Yana Studio |
+| **Stack** | Rust, Python, shell | Node.js, React | SwiftUI, Code-OSS |
 | **Role** | Decides | Shows | Shows |
 
 The apps never call a model provider themselves. Studio sends every request through
@@ -154,7 +157,7 @@ feature-complete. `Experimental` means opt-in and not independently verified.
 
 ```text
 core/
-├── hooks/    # 66 PreToolUse / PostToolUse / Stop hooks
+├── hooks/    # 66 PreToolUse / PostToolUse / Stop hooks; settings.json picks which run
 ├── rules/    # 71 rules, most are guidance the agent applies; hooks enforce a subset
 ├── agents/   # 100 specialist agents
 ├── skills/   # 2,036 skills
@@ -174,7 +177,7 @@ Open a section for the details.
 A single Rust binary owns the turn loop and the authority check for every client, so
 Studio, the CLI and MCP do not each reimplement permission logic.
 
-- **Providers:** anthropic, openai, gemini, groq, deepseek, openrouter, xai, novita, nvidia, minimax, glm, huggingface, 9router, kimi (cloud), and ollama, lmstudio, llamacpp, turbofieldfare, airllm (local). The canonical list is [`src/model/catalog.rs`](src/model/catalog.rs); a contract test keeps Studio in sync with it.
+- **Providers:** anthropic, openai, gemini, groq, deepseek, openrouter, xai, novita, nvidia, minimax, glm, huggingface, 9router, kimi, mistral, together, fireworks, deepinfra, cerebras, sambanova, perplexity, qwen, cohere, ai21, ernie (cloud), and ollama, lmstudio, llamacpp, turbofieldfare, airllm, vllm, jan (local). The canonical list is [`src/model/catalog.rs`](src/model/catalog.rs).
 - **Failover:** typed provider errors, fallback providers and credential-pool rotation.
 - **State:** SQLite session store with full-text search, per-profile state, crash recovery, and shadow-git checkpoints with rollback.
 - **Capability tools:** file read/patch, command execution under validation, MCP client over stdio, `web.search` through a checked HTTPS layer, and a read-only LSP client.
@@ -188,44 +191,11 @@ real local model rather than a mock.
 </details>
 
 <details>
-<summary><b>Performance: measured numbers and their limits</b></summary>
+<summary><b>Performance: where the measurements live</b></summary>
 
-
-Measured 2026-11-16 on an Apple M4 MacBook Air (16 GB RAM, macOS 27.3), `yana-rt` 1.5.4
-default release build at the release commit `c8c29fb2`, against this repository. Rust and
-Python run interleaved after one warm-up, and each figure is a median (runs in the table).
-The Python column is the script that each Rust command replaces. The last column is the
-2026-11-15 run of 1.5.2 with the same method; full history is in [BENCHMARK.md](BENCHMARK.md)
-and in the [technical report](https://yana.vutam.link/whitepaper-en.html).
-
-| Path | `yana-rt` 1.5.4 | Python | Result | Same output? | 1.5.2 (2026-11-15) |
-| --- | ---: | ---: | --- | --- | --- |
-| Process startup (60 runs) | **6.17 ms** | | | | 4.21 ms |
-| `doctor` (12) | **152 ms** | 209 ms | Rust 1.4x faster | | 139 ms, 1.4x |
-| `ci check` (20) | **7.2 ms** | 34.1 ms | Rust 4.8x faster | Yes, 6 warnings each | 5.7 ms, 5.4x |
-| `scan core/skills` (5) | **0.58 s** | 8.60 s | Rust 14.8x faster | Same top finding (`SE004`); files 1,794 vs 1,825 | 0.56 s, 14.5x |
-| Destructive-command guard (40) | **5.91 ms** | | | | 5.27 ms |
-| Token-budget guard (40) | **5.64 ms** | | | | not measured |
-
-| Memory and size | `yana-rt` 1.5.4 | Python |
-| --- | ---: | ---: |
-| Peak RSS, `scan core/skills` | **16.3 MiB** | 25.4 MiB |
-| Peak RSS, default full-repo scan | **20.7 MiB** | 32.1 MiB |
-| Release binary (default build) | 22.9 MiB | |
-
-The speed-up ratios match the 1.5.2 run. The machine was busy during this run (load
-average 5.0 to 5.2), and Rust absolute times are 3 to 47% higher than on 2026-11-15; the
-two runs cannot yet separate the machine's share from the code's. The binary has been
-22.9 MiB since the MCP server joined the default build in October.
-
-> [!WARNING]
-> The default full-repo `scan` is not a like-for-like comparison yet: the two default
-> scopes differ (Rust 0.29 s, Python 6.89 s). That is a parity gap to close, not a 23x
-> speedup. The token-budget guard is timed on its first call in a project with the
-> `flock-v1` marker present.
-
-These are single-machine numbers. Linux and Windows are not measured.
-
+Dated measurements, with the version, machine and method for each run, are in
+[BENCHMARK.md](BENCHMARK.md). They are not repeated here, so that this page cannot show
+an old run as the current one.
 
 </details>
 

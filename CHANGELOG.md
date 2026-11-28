@@ -8,7 +8,16 @@ All notable changes to Yana AI release packs are documented here.
 
 ---
 
-## Unreleased: approved commands run, and say they are not isolated
+## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.5: remembered approvals, control levels, away mode, shared provider keys (2026-11-28)
+
+Update with `cargo install yana-rt` and `pip install -U yana-ai`. The Yana app
+shows the new controls only with a `yana-rt` of 1.5.5 or newer.
+
+1.5.5 was prepared on 2026-11-19 and released on 2026-11-28 with the changes
+below added.
+
+**Approved commands run, and say they are not isolated.** This changes what an
+approval does; read it before updating.
 
 - An approved command runs directly in the working folder, with the rights of
   your account, its environment and network access. The approval says it is not
@@ -35,10 +44,11 @@ All notable changes to Yana AI release packs are documented here.
 - The approval store is no longer written through a symlinked `.yana-ai` folder
   or a planted temporary file.
 
----
+**Also in 1.5.5:**
 
-## Unreleased: provider keys saved once
-
+- **Thirteen more providers** run on the OpenAI-compatible adapter: Mistral,
+  Together, Fireworks, DeepInfra, Cerebras, SambaNova, Perplexity, Qwen,
+  Cohere, AI21, ERNIE, vLLM and Jan. They were not called with real keys.
 - `yana-rt os credential set --if-absent <provider>` leaves an existing key
   alone (exit 3). `os credential status --json` also reports
   `native_secret_unknown` and `native_secret_removed`.
@@ -57,13 +67,8 @@ All notable changes to Yana AI release packs are documented here.
 - Control levels no longer approve `security`, `yana-rt os`, `yana-rt chat` or
   `find -exec` by themselves, and MCP and LSP servers are marked as started by
   the agent.
-
----
-
-## yana-rt (crates.io), yana-ai (PyPI) and product 1.5.5: remembered approvals, control levels, away mode (2026-11-19)
-
-Update with `cargo install yana-rt` and `pip install -U yana-ai`. The Yana app
-shows the new controls only with a `yana-rt` of 1.5.5 or newer.
+- **Experimental:** `yana-rt bridge serve` opens a local socket for Yana apps.
+  No app connects to it yet and it has had no security review.
 
 - **Remember an approval.** An approved command can be remembered for the
   session or for the project. The grant is pinned to the exact command text and
@@ -84,7 +89,7 @@ shows the new controls only with a `yana-rt` of 1.5.5 or newer.
   because only the per-call approval path had an implementation for it. Leases
   that already existed now really run commands and write files. MCP, LSP and web
   search still do not run on an allow alone.
-- Known limits: an approved command that is not sandboxed can still write under
+- Known limits: an approved command can write under
   `$HOME`, so the trust store is not tamper-proof against it; `decided_by` and
   `scope` come from unauthenticated stdin; a remembered command is pinned by its
   text, not by what the program does.

@@ -841,6 +841,10 @@ enum LeaseAction {
         /// checked here.
         #[arg(long)]
         parent_lease_id: Option<String>,
+        /// Keep the lease outside this folder, for your own app's turns (its
+        /// "Auto" mode). Only this kind covers a turn you started yourself.
+        #[arg(long, conflicts_with = "parent_lease_id")]
+        personal: bool,
         #[arg(long)]
         json: bool,
     },
@@ -1400,6 +1404,7 @@ fn dispatch() {
                 expires_in_minutes,
                 invocation_budget,
                 parent_lease_id,
+                personal,
                 json,
             } => {
                 if let Err(error) = capability::lease::cmd_lease_grant(
@@ -1410,6 +1415,7 @@ fn dispatch() {
                     expires_in_minutes,
                     invocation_budget,
                     parent_lease_id,
+                    personal,
                     json,
                 ) {
                     eprintln!("[lease] {error:#}");

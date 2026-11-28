@@ -107,6 +107,68 @@ pub(crate) fn why_not(facts: &CallFacts) -> String {
     .to_string()
 }
 
+/// What a grant the person gave their own app may cover without asking: a command
+/// on the short safe list that stays inside the project, or an ordinary file of
+/// the project. Everything else is asked, whatever the grant lists.
+pub(super) fn app_grant_may_cover(facts: &CallFacts) -> bool {
+    match facts.capability {
+        "command.execute" => facts.command.is_some_and(|command| {
+            dangerous_command(command).is_none()
+                && !is_opaque_command(command)
+                && is_safe_command(command)
+                && stays_in_project(command, facts.root)
+        }),
+        "file.write" | "file.patch" => ordinary_project_file(facts),
+        _ => false,
+    }
+}
+
+/// Beginnings of options that write a file, load configuration, or name a program to run.
+const REACHING_OPTIONS: &[&str] = &[
+    "--ou", "-o", "--config", "-c", "-C", "-Z", "--exec", "-exec", "--toolexec", "-toolexec", "--ext-diff",
+    "--textconv", "--pre", "--hostname-bin", "--no-index", "+", "--o=",
+    // Follow links out of the folder, or read a file named inside the option.
+    "-f", "--follow", "--dereference",
+    // Carry flags, a program or an output file for the tool underneath.
+    "-ldflags", "--ldflags", "-gccgoflags", "-gcflags", "-asmflags", "-vettool", "--vettool", "--emit", "--codegen",
+    "--node-options", "--script-shell", "-coverprofile", "--coverprofile", "-memprofile", "-cpuprofile",
+    "-blockprofile", "-mutexprofile", "-trace", "-outputdir",
+];
+
+/// The program is found by name (never a path, which the folder could supply), no
+/// option reaches elsewhere, and every path given is inside the project.
+fn stays_in_project(command: &str, root: &Path) -> bool {
+    let Ok(tokens) = crate::capability::command::tokenize_command(command) else { return false };
+    let Some((program, arguments)) = tokens.split_first() else { return false };
+    let Ok(root) = root.canonicalize() else { return false };
+    let inside = |value: &str| {
+        let path = Path::new(value);
+        if path.is_absolute() || value.starts_with('~') || path.components().any(|part| part == std::path::Component::ParentDir) {
+            return false;
+        }
+        // Judged where it really is: the nearest part that exists must be in the project.
+        let full = root.join(path);
+        let existing = full.ancestors().find(|part| part.symlink_metadata().is_ok());
+        existing.is_some_and(|part| part.canonicalize().is_ok_and(|real| real.starts_with(&root)))
+    };
+    // A value that could itself hold flags or a second path is not judged at all.
+    let plain = |value: &str| !value.starts_with('-') && !value.contains(['=', ' ', '\t', '\n']);
+    !program.contains(['/', '\\'])
+        && arguments.iter().all(|argument| {
+            if REACHING_OPTIONS.iter().any(|option| argument.starts_with(option)) {
+                return false;
+            }
+            let Some(option) = argument.strip_prefix('-') else { return inside(argument) };
+            if let Some((_, value)) = option.split_once('=') {
+                // An option's value may be written to: structure files are asked.
+                return plain(value) && inside(value) && !is_sensitive_path(Path::new(value));
+            }
+            // Short options bundled together must not hide one that follows links or names a file.
+            let bundle = !option.starts_with('-') && option.contains(['R', 'L', 'f', 'o']);
+            !argument.contains('/') && !bundle
+        })
+}
+
 /// An existing directory inside the project, a file that is not sensitive.
 /// The path is judged where it really is: a symlink into `.github` is `.github`.
 fn ordinary_project_file(facts: &CallFacts) -> bool {

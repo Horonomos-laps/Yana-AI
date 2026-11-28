@@ -269,6 +269,13 @@ impl LeaseStore {
         Ok(Self { root: root.to_path_buf(), file: user_store_file(root, "human-grants")? })
     }
 
+    /// The store for what a person grants their own app ("Auto"). Outside the
+    /// repository for the same reason as `for_human_grants`: a folder that ships
+    /// `leases.json` must not be able to run commands in the person's own turn.
+    pub(crate) fn for_app_grants(root: &Path) -> Result<Self> {
+        Ok(Self { root: root.to_path_buf(), file: user_store_file(root, "app-grants")? })
+    }
+
     /// Runs `action` as one `flock-v1` critical section scoped to this
     /// store's `repo_root` — every caller of this function must do its
     /// *entire* read-modify-write cycle (read, decide, mutate, write)
@@ -505,6 +512,10 @@ impl LeaseStore {
         if Self::NEVER_LEASED.contains(&capability) {
             return Ok(None);
         }
+        // A scoped lease says which commands; a call whose command cannot be read matches none.
+        if capability == "command.execute" && command_text.is_none() {
+            return Ok(None);
+        }
         self.with_locked(|| {
             let mut leases = read_leases_at(&self.file)?;
             let now = Utc::now();
@@ -650,6 +661,23 @@ fn ancestor_chain_indices(
 // Mirror `cost.rs`'s `cmd_cost_*` convention exactly: resolve the project
 // root from the current directory, do the work, print plain text or `--json`.
 
+/// A personal grant is a person's decision; a command the agent runs must not
+/// make it. Defence in depth, like `yana-rt trust allow`.
+fn refuse_personal_grant_from_agent(inside_agent_command: bool) -> Result<()> {
+    if inside_agent_command {
+        bail!("this was started by an agent's command; only the person (or their app) may grant a personal lease");
+    }
+    Ok(())
+}
+
+/// Only a command grant can be narrowed; lists on any other kind would be ignored.
+fn check_personal_scope(capability: &str, allow: &[String], deny: &[String]) -> Result<()> {
+    if capability != "command.execute" && !(allow.is_empty() && deny.is_empty()) {
+        bail!("--allow and --deny apply only to command.execute; a personal '{capability}' grant covers every ordinary file");
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn cmd_lease_grant(
     subject: String,
@@ -659,10 +687,20 @@ pub fn cmd_lease_grant(
     expires_in_minutes: u64,
     invocation_budget: Option<u32>,
     parent_lease_id: Option<String>,
+    personal: bool,
     json: bool,
 ) -> Result<()> {
     let root = std::env::current_dir().context("cannot resolve project root")?;
-    let lease = LeaseStore::for_root(&root).grant(
+    let store = if personal {
+        refuse_personal_grant_from_agent(std::env::var_os(super::command::AGENT_CHILD_ENV).is_some())?;
+        // The app grants in ordinary folders too, which have no lock marker yet.
+        check_personal_scope(&capability, &allow, &deny)?;
+        crate::runtime::prepare_locking(&root)?;
+        LeaseStore::for_app_grants(&root)?
+    } else {
+        LeaseStore::for_root(&root)
+    };
+    let lease = store.grant(
         subject,
         capability,
         allow,
@@ -696,12 +734,20 @@ pub fn cmd_lease_grant(
 
 pub fn cmd_lease_list(json: bool) -> Result<()> {
     let root = std::env::current_dir().context("cannot resolve project root")?;
-    let mut leases = LeaseStore::for_root(&root).list()?;
+    // A broken file in the folder must not hide the person's own grants.
+    let mut leases = LeaseStore::for_root(&root).list().unwrap_or_else(|error| {
+        eprintln!("[lease] could not read this folder's leases: {error:#}");
+        Vec::new()
+    });
     // A person's remembered answers live in a store outside the repository.
     // If it cannot be opened, say so instead of showing a list that looks complete.
     match LeaseStore::for_human_grants(&root).and_then(|store| store.list()) {
         Ok(remembered) => leases.extend(remembered),
         Err(error) => eprintln!("[lease] could not read the answers a person remembered: {error:#}"),
+    }
+    match LeaseStore::for_app_grants(&root).and_then(|store| store.list()) {
+        Ok(granted) => leases.extend(granted),
+        Err(error) => eprintln!("[lease] could not read the grants given to the app: {error:#}"),
     }
     if json {
         println!("{}", serde_json::to_string_pretty(&leases)?);
@@ -732,13 +778,19 @@ pub fn cmd_lease_list(json: bool) -> Result<()> {
 
 pub fn cmd_lease_revoke(id: String, json: bool) -> Result<()> {
     let root = std::env::current_dir().context("cannot resolve project root")?;
-    // The id may belong to the project's store or to the store of a person's
-    // remembered answers; try the project's first, then the other.
-    if let Err(project_error) = LeaseStore::for_root(&root).revoke(&id) {
-        let remembered = LeaseStore::for_human_grants(&root).and_then(|store| store.revoke(&id));
-        if remembered.is_err() {
-            return Err(project_error);
+    // Every store: a folder that plants the same id must not keep the person's own grant alive.
+    let project = LeaseStore::for_root(&root).revoke(&id);
+    let mut elsewhere = false;
+    for store in [LeaseStore::for_human_grants(&root), LeaseStore::for_app_grants(&root)] {
+        // A store that holds the id must revoke it: a failure there is reported.
+        let Ok(store) = store else { continue };
+        if store.list()?.iter().any(|lease| lease.id == id) {
+            store.revoke(&id)?;
+            elsewhere = true;
         }
+    }
+    if !elsewhere {
+        project?;
     }
     if json {
         println!("{}", serde_json::json!({ "revoked": id }));
@@ -763,6 +815,32 @@ mod tests {
         fs::create_dir_all(marker.parent().unwrap()).unwrap();
         fs::write(&marker, yana_rt::flock_v1::PROTOCOL_VERSION).unwrap();
         dir
+    }
+
+    #[test]
+    fn a_command_lease_never_covers_a_call_whose_command_cannot_be_read() {
+        let root = temp_root();
+        let store = LeaseStore::for_root(&root);
+        grant_test_lease(&store, None);
+        let ask = |text| store.try_consume_matching("agent:test-fixer", "command.execute", &root, text).unwrap();
+        assert!(ask(Some("cargo test")).is_some(), "the lease itself must match, or the next line proves nothing");
+        assert_eq!(ask(None), None);
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_agents_own_command_cannot_grant_a_personal_lease() {
+        assert!(refuse_personal_grant_from_agent(true).is_err());
+        assert!(refuse_personal_grant_from_agent(false).is_ok());
+    }
+
+    #[test]
+    fn a_personal_file_grant_cannot_pretend_to_be_scoped() {
+        let scoped = vec!["src".to_string()];
+        assert!(check_personal_scope("file.write", &scoped, &[]).is_err());
+        assert!(check_personal_scope("file.patch", &[], &scoped).is_err());
+        assert!(check_personal_scope("file.write", &[], &[]).is_ok());
+        assert!(check_personal_scope("command.execute", &scoped, &scoped).is_ok());
     }
 
     fn grant_test_lease(store: &LeaseStore, budget: Option<u32>) -> Lease {

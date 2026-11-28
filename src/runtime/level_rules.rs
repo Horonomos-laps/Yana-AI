@@ -68,7 +68,7 @@ const SAFE_ANY_ARGS: &[&str] = &["ls", "pwd", "cat", "head", "tail", "wc", "grep
 
 /// Directory names that are never auto-written wherever they appear.
 const SENSITIVE_SEGMENTS: &[&str] = &[
-    ".git", ".github", ".gitlab", ".claude", ".codex", ".cursor", ".yana-ai", ".ssh", ".aws", "migrations", "db",
+    ".git", ".github", ".gitlab", ".cargo", ".claude", ".codex", ".cursor", ".yana-ai", ".ssh", ".aws", "migrations", "db",
 ];
 
 /// Two directories in a row, for the places that decide what runs or who may do what.
@@ -77,7 +77,7 @@ const SENSITIVE_PAIRS: &[(&str, &str)] =
 
 /// File names that change dependencies or the build, compared in lower case.
 const SENSITIVE_FILES: &[&str] = &[
-    "cargo.toml", "cargo.lock", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+    "cargo.toml", "cargo.lock", "build.rs", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
     "package.swift", "package.resolved", "dockerfile", "docker-compose.yml", "pyproject.toml",
     "requirements.txt", "go.mod", "go.sum", "gemfile", "gemfile.lock",
 ];

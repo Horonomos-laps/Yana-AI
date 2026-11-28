@@ -324,14 +324,29 @@ impl YanaAuthorityChain {
                 .as_deref()
                 .filter(|s| !s.is_empty() && !is_human_grant_subject(s))
             {
-                let matched_lease_id = LeaseStore::for_root(&context.session.repo_root)
-                    .try_consume_matching(
-                        subject,
-                        descriptor.name,
-                        &context.session.repo_root,
-                        command_text.as_deref(),
-                    )
-                    .unwrap_or(None);
+                // A person's own turn that names a subject is their app's Auto mode:
+                // only a grant kept outside the folder counts, never while they are
+                // away or asked to be asked every time. A delegated agent keeps
+                // using the project's leases.
+                let store = if context.human_initiated {
+                    let applies = !human_approved
+                        && super::level::app_grant_may_cover(&facts)
+                        && super::level_store::read_level(&context.session.repo_root) >= ControlLevel::Remember
+                        && !super::away::may_be_on(&context.session.repo_root);
+                    applies.then(|| LeaseStore::for_app_grants(&context.session.repo_root).ok()).flatten()
+                } else {
+                    Some(LeaseStore::for_root(&context.session.repo_root))
+                };
+                let matched_lease_id = store.and_then(|store| {
+                    store
+                        .try_consume_matching(
+                            subject,
+                            descriptor.name,
+                            &context.session.repo_root,
+                            command_text.as_deref(),
+                        )
+                        .unwrap_or(None)
+                });
                 if let Some(lease_id) = matched_lease_id {
                     return allow_through_lease(context, descriptor.name, command_text.as_deref(), lease_id);
                 }

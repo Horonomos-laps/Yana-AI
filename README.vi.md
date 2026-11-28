@@ -1,22 +1,29 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/yana-banner-dark.svg">
-    <img src="docs/yana-banner-light.svg" alt="Yana AI" width="760">
+    <img src="docs/yana-banner-light.svg" alt="Yana AI" width="720">
   </picture>
+  <br><br>
+  <img src="docs/yana-brand-strip.svg" alt="" width="720">
 </p>
 
 <h3 align="center">Model đề xuất. Yana quyết định. Con người nắm quyền.</h3>
 
 <p align="center">
-  Lớp điều khiển chạy trên máy bạn, đứng giữa mọi model AI và quyền lực thật trên máy.
+  Lớp điều khiển chạy trên máy bạn, đứng giữa mọi model AI và quyền lực thật trên máy.<br>
+  Runtime, rule và nhật ký kiểm toán của hệ sinh thái Yana.
 </p>
 
 <p align="center">
-  <a href="https://github.com/yanacuti1121/Yana-AI/actions/workflows/ci.yml"><img src="https://github.com/yanacuti1121/Yana-AI/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://crates.io/crates/yana-rt"><img src="https://img.shields.io/crates/v/yana-rt?logo=rust&color=ce422b" alt="yana-rt trên crates.io"></a>
-  <a href="https://pypi.org/project/yana-ai/"><img src="https://img.shields.io/pypi/v/yana-ai?logo=pypi&color=3775a9" alt="yana-ai trên PyPI"></a>
-  <a href="https://github.com/yanacuti1121/Yana-AI/releases/latest"><img src="https://img.shields.io/github/v/release/yanacuti1121/Yana-AI?label=release&color=8b5cf6" alt="Bản phát hành mới nhất"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2563eb" alt="Giấy phép Apache 2.0"></a>
+  <a href="https://github.com/Horonomos-laps/Yana-AI/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Horonomos-laps/Yana-AI/ci.yml?branch=main&label=CI&style=flat" alt="CI" height="20"></a>
+  <a href="https://crates.io/crates/yana-rt"><img src="https://img.shields.io/crates/v/yana-rt?logo=rust&label=crates.io&color=ce422b&style=flat" alt="yana-rt trên crates.io" height="20"></a>
+  <a href="https://pypi.org/project/yana-ai/"><img src="https://img.shields.io/pypi/v/yana-ai?logo=pypi&label=PyPI&color=3775a9&style=flat" alt="yana-ai trên PyPI" height="20"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2563eb?style=flat" alt="Giấy phép Apache 2.0" height="20"></a>
+</p>
+
+<p align="center">
+  <a href="https://merx.help/shield"><img src="https://merx.help/badge/A+.svg" alt="AgentShield Security" height="20"></a>
+  <a href="https://launchindex.io/tool/yana-ai"><img src="https://launchindex.io/badge/yana-ai.svg" alt="Verified Launch on LaunchIndex" height="20"></a>
 </p>
 
 <p align="center">
@@ -29,47 +36,46 @@
 <p align="center">
   <a href="#bắt-đầu-nhanh">Bắt đầu nhanh</a> ·
   <a href="#cách-hoạt-động">Cách hoạt động</a> ·
-  <a href="#yana-studio">Yana Studio</a> ·
-  <a href="#hiệu-năng">Hiệu năng</a> ·
+  <a href="#hệ-sinh-thái-yana">Hệ sinh thái</a> ·
+  <a href="#bên-trong">Bên trong</a> ·
   <a href="#điều-gì-bảo-vệ-bạn-và-nó-dừng-ở-đâu">Giới hạn</a> ·
   <a href="https://yana.vutam.link">Website</a>
 </p>
 
----
+<p align="center">
+  <sub>
+    <a href="CODE_OF_CONDUCT.md">Quy tắc ứng xử</a> ·
+    <a href="CONTRIBUTING.md">Đóng góp</a> ·
+    <a href="LICENSE">Giấy phép Apache-2.0</a> ·
+    <a href="SECURITY.md">Chính sách bảo mật</a>
+  </sub>
+</p>
 
-## Tổng quan
+<br>
 
 <table>
   <tr>
-    <td align="center" width="25%"><h3>19</h3><sub>provider model<br>13 cloud, 6 local</sub></td>
-    <td align="center" width="25%"><h3>45</h3><sub>subcommand runtime<br>trong một binary Rust</sub></td>
-    <td align="center" width="25%"><h3>66</h3><sub>hook cho tool call<br>Pre, Post và Stop</sub></td>
-    <td align="center" width="25%"><h3>290</h3><sub>file lõi<br>được ghim bằng SHA-256</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><h3>4</h3><sub>host agent<br>Claude Code, Codex, Cursor, Antigravity</sub></td>
-    <td align="center"><h3>4,2 ms</h3><sub>khởi động runtime<br>bản release, Apple M4</sub></td>
-    <td align="center"><h3>100</h3><sub>agent chuyên biệt</sub></td>
-    <td align="center"><h3>2.036</h3><sub>skill kiến thức làm việc,<br>không cấp quyền</sub></td>
+    <td align="center" width="20%"><h3>45</h3><sub>subcommand runtime<br>trong một binary Rust</sub></td>
+    <td align="center" width="20%"><h3>66</h3><sub>hook cho tool call<br>Pre, Post và Stop</sub></td>
+    <td align="center" width="20%"><h3>290</h3><sub>file lõi<br>được ghim bằng SHA-256</sub></td>
+    <td align="center" width="20%"><h3>100</h3><sub>agent chuyên biệt</sub></td>
+    <td align="center" width="20%"><h3>2.036</h3><sub>skill kiến thức,<br>không cấp quyền</sub></td>
   </tr>
 </table>
 
-Các con số được đếm từ hệ thống file bằng `core/scripts/check_counts.py`, CI chạy script
-này. Thời gian đo trên máy cục bộ ngày 20/10/2026; cách đo nằm ở mục [Hiệu năng](#hiệu-năng).
+<p align="center"><sub>Các con số được đếm từ hệ thống file và được CI kiểm bằng <code>core/scripts/check_counts.py</code>.</sub></p>
+
+## Vì sao có dự án này
+
+Một agent chạy được lệnh thì cũng chạy được lệnh sai. Skill và prompt giúp agent làm việc
+tốt hơn, nhưng không ngăn được nó gây thiệt hại. Yana đặt một bước quyết định riêng trước
+mọi hành động, và bước đó không phụ thuộc vào việc model cư xử đúng.
+
+- Model nói nó muốn làm gì. Yana quyết định việc đó có được phép không.
+- Mọi quyết định được ghi vào nhật ký nối băm, nên sửa về sau sẽ bị phát hiện.
+- Con người luôn dừng được agent, và có những hành động không thể diễn ra nếu thiếu con người.
 
 ## Bắt đầu nhanh
-
-**Ứng dụng desktop.** Tải Yana Studio từ
-[bản phát hành mới nhất](https://github.com/yanacuti1121/Yana-AI/releases/latest) hoặc
-[yana.vutam.link](https://yana.vutam.link).
-
-| Nền tảng | Bộ cài |
-| --- | --- |
-| macOS, Apple Silicon | `.dmg` hoặc `.zip` |
-| Windows | `.exe`, x64 hoặc ARM64 |
-| Linux, x86_64 | `.deb` hoặc `.AppImage` |
-
-**Dòng lệnh.** Quản trị agent bạn đang dùng:
 
 ```bash
 pip install yana-ai    # CLI Python
@@ -78,21 +84,27 @@ yana-ai doctor .       # kiểm tra mọi thứ đã nối đúng chưa
 cargo install yana-rt  # runtime native, không cần Python
 ```
 
-Cần Python 3.11+ (hoặc Rust), Git và một host được hỗ trợ. Toàn bộ lệnh CLI nằm trong
-[COMMANDS.md](COMMANDS.md). Yana không phát hành lên npm, xem [VERSIONING.md](VERSIONING.md).
+Cần Python 3.11+ (hoặc Rust), Git và một host được hỗ trợ: Claude Code, Codex, Cursor
+hoặc Antigravity. Toàn bộ lệnh nằm trong [COMMANDS.md](COMMANDS.md). Yana không phát hành
+lên npm, xem [VERSIONING.md](VERSIONING.md).
+
+**Muốn dùng app?** Yana cho macOS và Yana Studio nằm chung một gói tải ở
+[trang phát hành Yana-studio](https://github.com/Horonomos-laps/Yana-studio/releases/latest) hoặc
+[yana.vutam.link](https://yana.vutam.link). Cần macOS 14 trở lên trên Apple Silicon.
+
+<!-- IMAGE: Yana Studio đang chạy agent có phê duyệt -->
 
 > [!NOTE]
 > Bản macOS được ký ad-hoc và **chưa được Apple notarize** (dự án chưa có tài khoản
-> Apple Developer), nên Gatekeeper sẽ cảnh báo khi mở lần đầu.
+> Apple Developer), nên Gatekeeper cảnh báo khi mở lần đầu.
 > [docs/MACOS_INSTALL.md](docs/MACOS_INSTALL.md) hướng dẫn hai cách chính thức để mở.
-> Mỗi bản phát hành có danh sách file riêng: hãy kiểm tra có bản cho nền tảng của bạn,
-> và đối chiếu với `SHA256SUMS` khi có. Chưa có bản Linux ARM.
+> Đối chiếu file tải về với mã SHA-256 ghi trên bản phát hành. Binary `yana-rt` có cho
+> macOS (Apple Silicon và Intel), Linux x64 và Windows x64. Chưa có binary Linux ARM.
 
 ## Cách hoạt động
 
-Model có thể nói nó muốn làm gì. Yana quyết định việc đó có được phép hay không, và con
-người luôn có thể dừng nó lại. Mọi model đều đi cùng một đường: Claude, GPT, Gemini,
-DeepSeek, hay model chạy ngay trên máy bạn.
+Mọi model đều đi cùng một đường: Claude, GPT, Gemini, DeepSeek, hay model chạy ngay trên
+máy bạn.
 
 ```mermaid
 flowchart LR
@@ -107,19 +119,32 @@ flowchart LR
 
 Skill dạy agent cách làm việc. Chỉ capability mới cấp quyền hành động.
 
-### Cấu trúc hệ thống
+## Hệ sinh thái Yana
+
+|  | **Yana-AI** (bạn đang ở đây) | **[yana-web](https://github.com/Horonomos-laps/yana-web)** | **[Yana-studio](https://github.com/Horonomos-laps/Yana-studio)** |
+| --- | --- | --- | --- |
+| **Là gì** | Runtime `yana-rt`, rule và hook quản trị, CLI, agent và skill | Website, và app web chạy trên máy bạn có chat, dự án và kho khóa | Yana cho macOS và Yana Studio |
+| **Công nghệ** | Rust, Python, shell | Node.js, React | SwiftUI, Code-OSS |
+| **Vai trò** | Quyết định | Hiển thị | Hiển thị |
+
+Các app không tự gọi provider model. Studio gửi mọi request qua `yana-rt`, nên đổi client
+không bỏ qua được bước kiểm tra quyền.
+
+> [!NOTE]
+> App web, website và app desktop giờ nằm ở repository riêng. Link cũ và lịch sử nhắc
+> `tools/yana-web`, `tools/yana-studio` hay `tools/yana-ide` đang trỏ tới code đã chuyển đi.
+> Việc mới ở các phần đó làm tại yana-web và Yana-studio.
+
+## Trong repository này
 
 | Thành phần | Làm gì | Trạng thái |
 | --- | --- | --- |
-| **[Yana Studio](https://github.com/Horonomos-laps/Yana-studio/tree/main/yana-studio)** | Không gian làm việc desktop: file, editor, terminal, chat, task và canvas thiết kế cho một dự án thật (v1.7.0). | ![Đang dùng, chưa đủ tính năng](https://img.shields.io/badge/đang_dùng-chưa_đủ_tính_năng-2e8b75) |
-| **[Yana IDE](tools/yana-ide)** | Không gian làm việc agent trên nền VS Code được tùy biến sâu với Yana agent cockpit và công cụ office. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
-| **[Runtime `yana-rt`](src)** | Engine Rust với một vòng lặp turn và một hợp đồng authority cho mọi client, mọi provider. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
+| **[Runtime `yana-rt`](src)** | Một vòng lặp turn và một hợp đồng authority cho mọi client, mọi provider. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
 | **[Governance](core)** | Capability manifest, phê duyệt của con người, nhật ký kiểm toán nối băm, toàn vẹn core-lock. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
-| **[Giám Thị](#giám-thị)** | Bộ giám sát chạy ngoài mọi phiên AI, khóa mọi tool call về sau khi phát hiện sai lệch. | ![Đang dùng, tùy chọn bật](https://img.shields.io/badge/đang_dùng-tùy_chọn_bật-2e8b75) |
+| **[Giám Thị](#bên-trong)** | Bộ giám sát chạy ngoài mọi phiên AI, khóa mọi tool call về sau khi phát hiện sai lệch. | ![Đang dùng, tùy chọn bật](https://img.shields.io/badge/đang_dùng-tùy_chọn_bật-2e8b75) |
 | **[Harness adapters](adapters)** | Claude Code, Codex, Cursor và Antigravity. Mức thực thi khác nhau tùy host. | ![Tùy host](https://img.shields.io/badge/đang_dùng-tùy_host-2e8b75) |
 | **[Lớp tri thức](core/skills)** | 100 agent, 2.036 skill, command và rule dạy agent cách làm việc. Chúng không cấp quyền nào. | ![Đang dùng](https://img.shields.io/badge/-đang_dùng-2e8b75) |
 | **[Yana OS](src/os)** | Lớp quản lý cục bộ: danh tính agent, mức tự chủ, quota, sức khỏe, cách ly. | ![Đang phát triển](https://img.shields.io/badge/-đang_phát_triển-d97706) |
-| **[Yana Desktop / Web](https://github.com/Horonomos-laps/yana-web)** | Vỏ Electron và giao diện web đời trước. Studio là bản dựng lại riêng, không phải đổi giao diện. | ![Bảo trì riêng](https://img.shields.io/badge/-bảo_trì_riêng-64748b) |
 | **[Yana Wheelbot](https://github.com/yanacuti1121/yana-wheelbot)** | Nền tảng robot trên ESP32-S3, nằm trong repository riêng. | ![Thử nghiệm](https://img.shields.io/badge/-thử_nghiệm-dc2626) |
 
 `Đang dùng` nghĩa là đã phát hành và được sử dụng. `Đang phát triển` nghĩa là đã có code
@@ -131,7 +156,7 @@ cấu hình build, kể cả các lệnh nằm sau feature flag.
 
 ```text
 core/
-├── hooks/    # 66 hook PreToolUse / PostToolUse / Stop (63 shell, 3 JavaScript)
+├── hooks/    # 66 hook PreToolUse / PostToolUse / Stop; settings.json chọn cái nào chạy
 ├── rules/    # 71 rule, phần lớn là hướng dẫn agent tự áp dụng; hook thực thi một phần
 ├── agents/   # 100 agent chuyên biệt
 ├── skills/   # 2.036 skill
@@ -140,52 +165,17 @@ core/
     └── core-lock.json    # manifest SHA-256, ghim 290 file lõi
 ```
 
-## Yana Studio (v1.7.0)
+## Bên trong
 
-<p align="center">
-  <img src="docs/studio-screen-1.webp" alt="Yana Studio với khung chat, bảng thông tin dự án và trạng thái quản trị" width="900">
-</p>
-
-Một cửa sổ cho những thứ bạn hay phải chuyển qua lại khi làm việc với AI trên một dự án.
-Studio chỉ nói chuyện với model qua `yana-rt`; lớp giao diện không bao giờ gọi provider.
-
-| Khu vực | Có gì |
-| --- | --- |
-| **File và editor** | Mở thư mục thật, tìm theo tên file, sửa bằng CodeMirror. File đến 8 MiB sửa được; file lớn hơn mở dạng cửa sổ chỉ đọc 256 KiB. Khi lưu, Studio phát hiện thay đổi từ bên ngoài trước khi ghi đè. |
-| **Terminal** | Phiên PTY thật theo tab, hoặc lưới tối đa 12 phiên. |
-| **Git** | Trạng thái, worktree và diff, chỉ đọc. Stage và commit cố ý không phải là tool của AI. |
-| **Chat** | Stream qua `yana-rt`, lưu nhiều cuộc trò chuyện, nút dừng, hỏi phê duyệt, thống kê token. |
-| **Model** | Cả 19 provider cộng một endpoint tương thích OpenAI tự đặt. Trình quản lý local phát hiện 9Router, Ollama, LM Studio, llama.cpp, TurboFieldfare và AirLLM. API key đi vào Rust qua stdin và được lưu mã hóa trong keystore của hệ điều hành, không bao giờ nằm trong file của workspace. |
-| **Task** | Dùng kho `yana-rt task` thật. Đánh dấu xong phải có bằng chứng, trạng thái `blocked` do runtime tính. |
-| **Canvas thiết kế** | Canvas native với 22 component, màn hình điện thoại và desktop, layer, undo/redo và đề xuất AI có kiểm soát. |
-| **Telemetry quản trị** | Cái gì được cho phép, cái gì bị chặn, và vì sao. |
-
-Chưa làm: danh sách thiết bị, màn hình phiên agent, ghép nối điện thoại, chạy qua
-SSH/Docker, giao diện cấp quyền có thời hạn, tự cập nhật có ký số. Trạng thái từng màn
-hình nằm ở [`yana-studio/SCREEN-STATUS.md`](https://github.com/Horonomos-laps/Yana-studio/blob/main/yana-studio/SCREEN-STATUS.md) trong kho Yana-studio.
+Mở từng mục để xem chi tiết.
 
 <details>
-<summary><b>Build Studio từ mã nguồn (kho Yana-studio)</b></summary>
-
-Cần Node 24+ và bộ công cụ C++ cho `node-pty`.
-
-```bash
-git clone https://github.com/Horonomos-laps/Yana-studio.git && cd Yana-studio
-(cd yana-ide/studio-web && npm ci)
-cd yana-studio
-npm ci && npm run rebuild
-npm run stage:runtime -- /duong/dan/tuyet/doi/toi/yana-rt
-npm start
-```
-
-</details>
-
-## Runtime: `yana-rt`
+<summary><b>Runtime: yana-rt, engine viết bằng Rust</b></summary>
 
 Một binary Rust duy nhất nắm vòng lặp turn và bước kiểm tra authority cho mọi client, nên
 Studio, CLI và MCP không phải mỗi bên tự viết lại logic phân quyền.
 
-- **Provider:** anthropic, openai, gemini, groq, deepseek, openrouter, xai, novita, nvidia, minimax, glm, huggingface, 9router, kimi (cloud), và ollama, lmstudio, llamacpp, turbofieldfare, airllm (local). Danh sách chuẩn nằm ở [`src/model/catalog.rs`](src/model/catalog.rs); một contract test giữ Studio khớp với nó.
+- **Provider:** anthropic, openai, gemini, groq, deepseek, openrouter, xai, novita, nvidia, minimax, glm, huggingface, 9router, kimi, mistral, together, fireworks, deepinfra, cerebras, sambanova, perplexity, qwen, cohere, ai21, ernie (cloud), và ollama, lmstudio, llamacpp, turbofieldfare, airllm, vllm, jan (local). Danh sách chuẩn nằm ở [`src/model/catalog.rs`](src/model/catalog.rs).
 - **Failover:** lỗi provider có kiểu, provider dự phòng và xoay vòng credential pool.
 - **Trạng thái:** kho phiên SQLite có tìm kiếm toàn văn, trạng thái theo profile, phục hồi sau crash, và checkpoint shadow-git có rollback.
 - **Tool capability:** đọc/vá file, chạy lệnh có kiểm tra, MCP client qua stdio, `web.search` qua lớp HTTPS có kiểm soát, và LSP client chỉ đọc.
@@ -194,46 +184,21 @@ Studio, CLI và MCP không phải mỗi bên tự viết lại logic phân quy�
 Việc còn lại của runtime nằm ở [CURRENT-MILESTONE.md](CURRENT-MILESTONE.md): đưa mọi client về
 một capability executor chung, và thử tool calling với model local thật thay vì mock.
 
-## Hiệu năng
+</details>
 
-Đo ngày 16/11/2026 trên MacBook Air Apple M4 (RAM 16 GB, macOS 27.3), `yana-rt` 1.5.4 bản
-release mặc định ở commit phát hành `c8c29fb2`, chạy trên chính repo này. Rust và Python chạy
-xen kẽ sau một lần khởi động, mỗi số là trung vị (số lần chạy ghi trong bảng). Cột Python là
-script mà lệnh Rust tương ứng thay thế. Cột cuối là lần đo 1.5.2 ngày 15/11/2026 cùng phương
-pháp; lịch sử đầy đủ ở [BENCHMARK.md](BENCHMARK.md) và trong
-[báo cáo kỹ thuật](https://yana.vutam.link/whitepaper.html).
+<details>
+<summary><b>Hiệu năng: số đo nằm ở đâu</b></summary>
 
-| Đường chạy | `yana-rt` 1.5.4 | Python | Kết quả | Cùng output? | 1.5.2 (15/11/2026) |
-| --- | ---: | ---: | --- | --- | --- |
-| Khởi động tiến trình (60 lần) | **6,17 ms** | | | | 4,21 ms |
-| `doctor` (12) | **152 ms** | 209 ms | Rust nhanh hơn 1,4 lần | | 139 ms, 1,4 lần |
-| `ci check` (20) | **7,2 ms** | 34,1 ms | Rust nhanh hơn 4,8 lần | Có, 6 cảnh báo mỗi bên | 5,7 ms, 5,4 lần |
-| `scan core/skills` (5) | **0,58 s** | 8,60 s | Rust nhanh hơn 14,8 lần | Cùng lỗi đứng đầu (`SE004`); số file 1.794 so với 1.825 | 0,56 s, 14,5 lần |
-| Guard lệnh phá hủy (40) | **5,91 ms** | | | | 5,27 ms |
-| Guard ngân sách token (40) | **5,64 ms** | | | | chưa đo |
+Các lần đo có ghi ngày, phiên bản, máy và cách đo nằm ở [BENCHMARK.md](BENCHMARK.md).
+Trang này không chép lại, để một lần đo cũ không bị hiểu là số hiện tại.
 
-| Bộ nhớ và kích thước | `yana-rt` 1.5.4 | Python |
-| --- | ---: | ---: |
-| RSS đỉnh, `scan core/skills` | **16,3 MiB** | 25,4 MiB |
-| RSS đỉnh, quét toàn repo mặc định | **20,7 MiB** | 32,1 MiB |
-| Binary release (bản dựng mặc định) | 22,9 MiB | |
+</details>
 
-Tỷ lệ nhanh hơn khớp với lần đo 1.5.2. Máy bận trong lúc đo (tải trung bình 5,0 đến 5,2), và
-số tuyệt đối của Rust cao hơn 3 đến 47% so với ngày 15/11; hai lần đo chưa tách được phần do
-máy và phần do mã. Binary nặng 22,9 MiB từ khi máy chủ MCP vào bản dựng mặc định (tháng 10).
+<details>
+<summary><b>Giám Thị: bộ giám sát độc lập</b></summary>
 
-> [!WARNING]
-> Lệnh `scan` toàn repo mặc định chưa so sánh ngang hàng được: phạm vi mặc định của hai bên
-> khác nhau (Rust 0,29 s, Python 6,89 s). Đó là khoảng cách về độ tương đương cần xử lý,
-> không phải Rust nhanh hơn 23 lần. Guard ngân sách token được đo ở lần gọi đầu trong một dự
-> án đã có tệp đánh dấu `flock-v1`.
-
-Đây là số đo trên một máy. Chưa đo trên Linux và Windows.
-
-## Giám Thị
-
-Bộ giám sát độc lập chạy ngoài mọi phiên AI, từ bộ lập lịch của chính hệ điều hành (launchd
-trên macOS, systemd timer trên Linux, Task Scheduler trên Windows), 6 giờ một lần.
+Bộ giám sát chạy ngoài mọi phiên AI, từ bộ lập lịch của chính hệ điều hành (launchd trên
+macOS, systemd timer trên Linux, Task Scheduler trên Windows), 6 giờ một lần.
 
 1. Nó so repo với một commit gốc đã được con người duyệt, trên các file điều khiển việc thực thi: cấu hình hook của Claude Code, Codex và Cursor, workflow CI, `core/rules`, `core/gates`, `core/hooks`, `core/scripts` và `src/guard`.
 2. Khi thấy sai lệch, nó ghi `GIAMTHI_HALT.lock`. Một hook chạy đầu tiên ở mọi tool call sẽ từ chối tất cả khi file khóa còn đó.
@@ -244,7 +209,10 @@ chạy theo lịch nên có khoảng trễ tối đa 6 giờ giữa lúc thay đ
 `PreToolUse` cho lệnh shell, nên với Codex Yana kiểm tra thêm file khóa ở `SessionStart` và
 `UserPromptSubmit`.
 
-## Harness adapters
+</details>
+
+<details>
+<summary><b>Harness adapters: Claude Code, Codex, Cursor, Antigravity</b></summary>
 
 | Host | Áp dụng quản trị thế nào | Mức thực thi |
 | --- | --- | --- |
@@ -257,6 +225,8 @@ Chi tiết và lệnh chuyển đổi: [adapters/README.md](adapters/README.md).
 Claude Code (`/plan`, `/verify`, `/code-review` và các lệnh khác) nằm trong `core/commands/` và
 chạy bên trong một phiên.
 
+</details>
+
 ## Điều gì bảo vệ bạn, và nó dừng ở đâu
 
 | Lớp bảo vệ | Làm gì | Dừng ở đâu |
@@ -268,9 +238,9 @@ chạy bên trong một phiên.
 | **Rule và hook** | Hook chặn ở runtime. | Phần lớn file trong `core/rules` mô tả hành vi agent tự áp dụng; chỉ phần được nối vào hook mới bị thực thi. Chưa có quy trình ký code. |
 | **Guard lệnh phá hủy** | `guard-destructive.sh` chặn `rm -rf`, force-push, `DROP TABLE` và tương tự. | So khớp chuỗi lệnh, không phân tích cú pháp shell đầy đủ, nên một lệnh cố tình tạo ra có thể lọt qua. |
 
-Antigravity chỉ kiểm tra lệnh shell và bị bỏ qua khi chạy `agy --dangerously-skip-permissions`, Cursor không kiểm tra lệnh MCP, và bản web chạy trên trình duyệt
-không có Rust runtime chưa được quản trị đầy đủ. Chi tiết:
-[giới hạn đã biết](docs/reference/known-limitations.md).
+Antigravity chỉ kiểm tra lệnh shell và bị bỏ qua khi chạy `agy --dangerously-skip-permissions`,
+Cursor không kiểm tra lệnh MCP, và bản web chạy trên trình duyệt không có Rust runtime chưa
+được quản trị đầy đủ. Chi tiết: [giới hạn đã biết](docs/reference/known-limitations.md).
 
 Bốn lệnh mẫu, chạy lại ngày 14/11/2026 với chuỗi hook mặc định trên `main` (theo
 [báo cáo kỹ thuật](https://yana.vutam.link/whitepaper.html), Bảng 1):
@@ -285,17 +255,30 @@ Bốn lệnh mẫu, chạy lại ngày 14/11/2026 với chuỗi hook mặc đị
 ## Phiên bản
 
 Ba trục, mỗi trục có số và registry riêng: sản phẩm (không phân phối), `yana-rt` trên
-crates.io, và gói Python `yana-ai` trên PyPI. Các ứng dụng trong `tools/` phát hành qua GitHub
-Releases với tag riêng (`studio-v*` cho Studio). Trang này cố ý không ghi số phiên bản hiện
-tại vì chúng nhanh cũ; các badge ở đầu trang đọc trực tiếp. Xem [VERSIONING.md](VERSIONING.md).
+crates.io, và gói Python `yana-ai` trên PyPI. Các app phát hành qua GitHub Releases của
+[Yana-studio](https://github.com/Horonomos-laps/Yana-studio) với tag riêng. Trang này cố ý
+không ghi số phiên bản vì chúng nhanh cũ; các badge ở đầu trang đọc trực tiếp. Xem
+[VERSIONING.md](VERSIONING.md).
 
-## Xem thêm
+## Tài liệu
 
-[ARCHITECTURE.md](ARCHITECTURE.md) · [PHILOSOPHY.md](PHILOSOPHY.md) · [ROADMAP.md](ROADMAP.md) · [CURRENT-MILESTONE.md](CURRENT-MILESTONE.md) · [CHANGELOG.md](CHANGELOG.md) · [BENCHMARK.md](BENCHMARK.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · [Lời cảm ơn](ACKNOWLEDGEMENTS.md) · [Nguồn gốc](docs/history/LINEAGE.md)
+| Hiểu | Xây | Tin cậy | Theo dõi |
+| --- | --- | --- | --- |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | [CONTRIBUTING.md](CONTRIBUTING.md) | [SECURITY.md](SECURITY.md) | [ROADMAP.md](ROADMAP.md) |
+| [PHILOSOPHY.md](PHILOSOPHY.vi.md) | [COMMANDS.md](COMMANDS.md) | [Giới hạn đã biết](docs/reference/known-limitations.md) | [CURRENT-MILESTONE.md](CURRENT-MILESTONE.md) |
+| [Nguồn gốc](docs/history/LINEAGE.md) | [BENCHMARK.md](BENCHMARK.md) | [Lời cảm ơn](ACKNOWLEDGEMENTS.vi.md) | [CHANGELOG.md](CHANGELOG.md) |
 
 ---
 
 <p align="center">
+  <img src="docs/yana-hero.svg" alt="Yana AI: AI làm việc. Bạn giữ quyền." width="100%" />
+</p>
+
+<p align="center">
   Do một người xây dựng, không đội ngũ, không tài trợ: <b>Vũ Văn Tâm</b>, Việt Nam<br>
-  <a href="https://yana.vutam.link/">yana.vutam.link</a> · phamlongh230@gmail.com · <a href="LICENSE">Apache 2.0</a>
+  <a href="https://yana.vutam.link/">yana.vutam.link</a> ·
+  <a href="https://github.com/Horonomos-laps/Yana-AI">Yana-AI</a> ·
+  <a href="https://github.com/Horonomos-laps/yana-web">yana-web</a> ·
+  <a href="https://github.com/Horonomos-laps/Yana-studio">Yana-studio</a> ·
+  <a href="LICENSE">Apache 2.0</a>
 </p>
